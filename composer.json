@@ -1,0 +1,34 @@
+{
+  "name": "ppl/ppl-deepl-v3-extension-translator",
+  "description": "TYPO3 12.4 backend audit and selected-write helper for extension XLF translation files",
+  "type": "typo3-cms-extension",
+  "license": "GPL-2.0-or-later",
+  "authors": [
+    {
+      "name": "Pawel Pliousnin",
+      "email": "pliousnin@ppl-ds.com",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "php": ">=8.2",
+    "ppl/ppl-deepl-v3-requests": "^12.4",
+    "typo3/cms-backend": "^12.4",
+    "typo3/cms-core": "^12.4",
+    "typo3/cms-extbase": "^12.4",
+    "typo3/cms-fluid": "^12.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "Ppl\\PplDeeplV3ExtensionTranslator\\": "Classes/"
+    }
+  },
+  "extra": {
+    "branch-alias": {
+      "dev-main": "12.4.x-dev"
+    },
+    "typo3/cms": {
+      "extension-key": "ppl_deepl_v3_extension_translator"
+    }
+  }
+}

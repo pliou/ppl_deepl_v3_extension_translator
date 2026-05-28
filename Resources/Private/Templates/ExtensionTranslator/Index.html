@@ -1,0 +1,389 @@
+<html xmlns:f="http://typo3.org/ns/TYPO3/CMS/Fluid/ViewHelpers" data-namespace-typo3-fluid="true">
+    <div class="ppl-et">
+        <div class="ppl-et__header">
+            <div>
+                <h1><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:module.extensionTranslator.title" /></h1>
+            </div>
+            <div class="ppl-et__status">
+                <span class="ppl-et__pill"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.environment" />: {safety.environment}</span>
+                <f:if condition="{authKeyConfigured}">
+                    <f:then><span class="ppl-et__pill ppl-et__pill--ok"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:status.deeplConfigured" /></span></f:then>
+                    <f:else><span class="ppl-et__pill ppl-et__pill--warn"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:status.deeplMissing" /></span></f:else>
+                </f:if>
+            </div>
+        </div>
+
+        <f:for each="{messages}" as="message">
+            <div class="ppl-et__message ppl-et__message--{message.type}">{message.text}</div>
+        </f:for>
+
+        <form method="post" action="{route}" class="ppl-et__layout" id="pplExtensionTranslatorForm">
+            <input type="hidden" name="active_tab" value="{activeTab}" data-role="active-tab">
+            <input type="hidden" name="active_solution_strategy" value="{activeSolution}" data-role="active-solution">
+
+            <f:for each="{ignoredIds}" as="ignoredId">
+                <input type="hidden" name="ignored_findings[]" value="{ignoredId}">
+            </f:for>
+
+            <aside class="ppl-et__side ppl-et__side--left">
+                <section class="ppl-et__panel">
+                    <h2><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:section.scanScope" /></h2>
+                    <label for="scan_path"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.scanPath" /></label>
+                    <input id="scan_path" name="scan_path" value="{formData.scanPath}" class="form-control" placeholder="typo3conf/ext/my_ext">
+                    <label for="scan_scope_select"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.scanScopePreset" /></label>
+                    <select id="scan_scope_select" class="form-control" data-role="scope-select">
+                        <option value=""></option>
+                        <f:for each="{scopeOptions}" as="scopeOption">
+                            <f:if condition="{scopeOption.exists}">
+                                <f:then><option value="{scopeOption.path}" data-read-only="{scopeOption.readOnly}">{scopeOption.label}</option></f:then>
+                                <f:else><option value="{scopeOption.path}" disabled="disabled">{scopeOption.label}</option></f:else>
+                            </f:if>
+                        </f:for>
+                    </select>
+                    <button class="btn btn-primary ppl-et__scan-button" type="submit" name="module_action" value="scan">
+                        <f:if condition="{report}">
+                            <f:then><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.restartScan" /></f:then>
+                            <f:else><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.scan" /></f:else>
+                        </f:if>
+                    </button>
+                </section>
+
+                <f:if condition="{report}">
+                    <section class="ppl-et__panel">
+                        <h2><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:section.xlfFiles" /></h2>
+                        <input type="hidden" name="selected_language_files[]" value="__none__" disabled="disabled" data-role="file-none-sentinel">
+                        <input class="form-control ppl-et__file-search" type="search" placeholder="{f:translate(key: 'LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:placeholder.fileSearch')}" data-role="file-search">
+                        <div class="ppl-et__file-actions">
+                            <button class="btn btn-default" type="button" data-role="files-select-all"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.selectAll" /></button>
+                            <button class="btn btn-default" type="button" data-role="files-deselect-all"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.deselectAll" /></button>
+                        </div>
+                        <div class="ppl-et__file-list">
+                            <f:for each="{report.languageFiles}" as="languageFile">
+                                <label class="ppl-et__file-item" data-role="file-item" data-search="{languageFile.searchText}">
+                                    <f:if condition="{languageFile.selected}">
+                                        <f:then><input type="checkbox" name="selected_language_files[]" value="{languageFile.relativePath}" checked="checked" data-role="file-checkbox"></f:then>
+                                        <f:else><input type="checkbox" name="selected_language_files[]" value="{languageFile.relativePath}" data-role="file-checkbox"></f:else>
+                                    </f:if>
+                                    <span>
+                                        <strong>{languageFile.extensionKey}</strong>
+                                        <code>{languageFile.shortRelativePath}</code>
+                                        <em>{languageFile.localeLabel}</em>
+                                        <small>{languageFile.statusSummary}</small>
+                                    </span>
+                                </label>
+                            </f:for>
+                        </div>
+                    </section>
+                </f:if>
+            </aside>
+
+            <main class="ppl-et__main">
+                <section class="ppl-et__tabs" aria-label="{f:translate(key: 'LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:section.issueTypeTabs')}">
+                    <f:for each="{issueTabs}" as="tab">
+                        <button type="submit" class="ppl-et__tab" name="module_action" value="refresh_selection" data-tab-value="{tab.value}">{tab.label}</button>
+                    </f:for>
+                </section>
+
+                <f:if condition="{report}">
+                    <section class="ppl-et__summary">
+                        <div><strong>{report.summary.xlfFiles}</strong><span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.xlfFiles" /></span></div>
+                        <div><strong>{report.summary.codeKeys}</strong><span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.codeKeys" /></span></div>
+                        <div><strong>{report.summary.keyless_unit}</strong><span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.keyless" /></span></div>
+                        <div><strong>{report.summary.key_mismatch_candidate}</strong><span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.mismatches" /></span></div>
+                        <div><strong>{report.summary.missing_source_unit}</strong><span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.missingSource" /></span></div>
+                        <div><strong>{report.summary.missing_target}</strong><span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.missingTarget" /></span></div>
+                        <div><strong>{report.summary.unused_candidate}</strong><span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.extra" /></span></div>
+                        <div><strong>{report.summary.writableRows}</strong><span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.writable" /></span></div>
+                    </section>
+
+                    <f:if condition="{actionPanel.solutionTabs}">
+                        <section class="ppl-et__solution-tabs" aria-label="{f:translate(key: 'LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:section.solutionStrategies')}">
+                            <f:for each="{actionPanel.solutionTabs}" as="solution">
+                                <button type="submit" class="ppl-et__solution-tab" name="module_action" value="refresh_selection" data-solution-value="{solution.id}" title="{solution.disabledReason}">
+                                    {solution.label}
+                                </button>
+                            </f:for>
+                        </section>
+                    </f:if>
+
+                    <section class="ppl-et__table-tools">
+                        <input class="form-control" type="search" placeholder="{f:translate(key: 'LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:placeholder.findingSearch')}" data-role="finding-search">
+                        <button class="btn btn-default" type="button" data-role="select-visible"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.selectAllVisible" /></button>
+                        <button class="btn btn-default" type="button" data-role="clear-selection"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.clearSelection" /></button>
+                    </section>
+
+                    <section class="ppl-et__table-wrap">
+                        <table class="table table-striped ppl-et__table">
+                            <thead>
+                                <tr>
+                                    <th><input type="checkbox" data-role="select-all"></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.issue" /></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.file" /></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.locale" /></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.key" /></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.sourceState" /></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.source" /></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.current" /></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.relatedCandidates" /></th>
+                                    <th><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:column.status" /></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <f:for each="{report.filteredFindings}" as="finding">
+                                    <tr data-role="finding-row" data-search="{finding.searchText}">
+                                        <td>
+                                            <f:if condition="{finding.selected}">
+                                                <f:then><input type="checkbox" name="selected_findings[]" value="{finding.id}" checked="checked" data-role="finding-checkbox" data-issue-type="{finding.issueType}"></f:then>
+                                                <f:else><input type="checkbox" name="selected_findings[]" value="{finding.id}" data-role="finding-checkbox" data-issue-type="{finding.issueType}"></f:else>
+                                            </f:if>
+                                        </td>
+                                        <td>
+                                            <span class="ppl-et__badge ppl-et__badge--{finding.issueType}">{finding.issueLabel}</span>
+                                            <f:if condition="{finding.baseIssueType} != {finding.issueType}">
+                                                <div class="ppl-et__hint">{finding.baseIssueType}</div>
+                                            </f:if>
+                                        </td>
+                                        <td><code>{finding.languageFile}</code></td>
+                                        <td>{finding.displayLocale}</td>
+                                        <td>
+                                            <f:if condition="{finding.displayKey}">
+                                                <code>{finding.displayKey}</code>
+                                            </f:if>
+                                        </td>
+                                        <td><code>{finding.sourceStatus}</code></td>
+                                        <td>{finding.sourceValue}</td>
+                                        <td>{finding.currentTargetValue}</td>
+                                        <td>{finding.relatedCandidatesLabel}</td>
+                                        <td>
+                                            <f:if condition="{finding.errorState}">
+                                                <f:then><span class="ppl-et__text-warn">{finding.errorState}</span></f:then>
+                                                <f:else>
+                                                    <f:if condition="{finding.canChange}">
+                                                        <f:then><span class="ppl-et__text-ok"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:status.changeable" /></span></f:then>
+                                                        <f:else><span class="ppl-et__muted">{finding.cannotChangeReason}</span></f:else>
+                                                    </f:if>
+                                                </f:else>
+                                            </f:if>
+                                        </td>
+                                    </tr>
+                                </f:for>
+                            </tbody>
+                        </table>
+                    </section>
+                </f:if>
+            </main>
+
+            <aside class="ppl-et__side ppl-et__side--right">
+                <section class="ppl-et__panel" id="ppl-et-action-panel">
+                    <h2><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:section.issueInfo" /></h2>
+                    <p class="ppl-et__panel-copy">{actionPanel.issueInfo.message}</p>
+                    <dl class="ppl-et__facts">
+                        <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.issueType" /></dt>
+                        <dd>{actionPanel.issueInfo.issueLabel}</dd>
+                        <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.visibleRows" /></dt>
+                        <dd>{actionPanel.issueInfo.visibleRows}</dd>
+                        <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.selectedRows" /></dt>
+                        <dd><span data-role="selected-count">{actionPanel.selectionSummary.selectedRows}</span></dd>
+                        <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.canChange" /></dt>
+                        <dd>{actionPanel.selectionSummary.canChange}</dd>
+                        <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.needsSource" /></dt>
+                        <dd>{actionPanel.selectionSummary.needsSource}</dd>
+                        <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.cannotChange" /></dt>
+                        <dd>{actionPanel.selectionSummary.cannotChange}</dd>
+                        <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.productionWrites" /></dt>
+                        <dd>
+                            <f:if condition="{safety.productionWritesAllowed}">
+                                <f:then><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:status.allowed" /></f:then>
+                                <f:else><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:status.blocked" /></f:else>
+                            </f:if>
+                        </dd>
+                    </dl>
+                    <f:if condition="{report.scope.writeBlockReason}">
+                        <div class="ppl-et__message ppl-et__message--warning">{report.scope.writeBlockReason}</div>
+                    </f:if>
+                    <f:if condition="{actionPanel.issueInfo.keyMismatchConflict}">
+                        <div class="ppl-et__message ppl-et__message--warning">
+                            <f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:message.keyMismatchConflict" />
+                        </div>
+                    </f:if>
+                    <f:if condition="{actionPanel.issueInfo.currentUsages}">
+                        <div class="ppl-et__detail-card">
+                            <strong><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.selectedKeyUsage" /></strong>
+                            <f:for each="{actionPanel.issueInfo.currentUsages}" as="usage">
+                                <code>{usage}</code>
+                            </f:for>
+                        </div>
+                    </f:if>
+                    <f:if condition="{actionPanel.issueInfo.relatedCandidates}">
+                        <div class="ppl-et__detail-card">
+                            <strong><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.possibleExistingKey" /></strong>
+                            <f:for each="{actionPanel.issueInfo.relatedCandidates}" as="candidate">
+                                <div class="ppl-et__candidate">
+                                    <code>{candidate.key}</code>
+                                    <span>{candidate.file}</span>
+                                    <span>{candidate.source}</span>
+                                    <f:if condition="{candidate.usedInCode}">
+                                        <em><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.alsoUsedInCode" /></em>
+                                        <f:for each="{candidate.usageLocations}" as="candidateUsage">
+                                            <code>{candidate.key} @ {candidateUsage}</code>
+                                        </f:for>
+                                    </f:if>
+                                </div>
+                            </f:for>
+                        </div>
+                    </f:if>
+                </section>
+
+                <section class="ppl-et__panel">
+                    <h2><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:section.solutionTools" /></h2>
+                    <h3>{actionPanel.tool.title}</h3>
+                    <p class="ppl-et__panel-copy">{actionPanel.tool.message}</p>
+
+                    <f:for each="{actionPanel.tool.validationErrors}" as="toolError">
+                        <div class="ppl-et__message ppl-et__message--warning">{toolError}</div>
+                    </f:for>
+
+                    <f:if condition="{actionPanel.tool.showSelectVisible}">
+                        <button class="btn btn-primary" type="button" data-role="select-visible"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.selectAllVisibleRows" /></button>
+                    </f:if>
+
+                    <f:if condition="{actionPanel.tool.fields.manualSource}">
+                        <label for="manual_source_text"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.manualSourceText" /></label>
+                        <textarea id="manual_source_text" name="manual_source_text" class="form-control" rows="3">{formData.manualSourceText}</textarea>
+                    </f:if>
+                    <f:if condition="{actionPanel.tool.fields.manualTarget}">
+                        <label for="manual_target_text"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.manualTargetText" /></label>
+                        <textarea id="manual_target_text" name="manual_target_text" class="form-control" rows="3">{formData.manualTargetText}</textarea>
+                    </f:if>
+                    <f:if condition="{actionPanel.tool.fields.targetKey}">
+                        <label for="target_key"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.targetKey" /></label>
+                        <input id="target_key" name="target_key" value="{formData.targetKey}" class="form-control">
+                        <f:if condition="{actionPanel.tool.targetKeySuggestions}">
+                            <div class="ppl-et__target-key-suggestions">
+                                <strong><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.suggestedMatchingKeys" /></strong>
+                                <f:for each="{actionPanel.tool.targetKeySuggestions}" as="suggestion">
+                                    <button class="ppl-et__target-key-suggestion" type="button" data-role="target-key-suggestion" data-target-key="{suggestion.key}">
+                                        <code>{suggestion.key}</code>
+                                        <f:if condition="{suggestion.source}">
+                                            <span>{suggestion.source}</span>
+                                        </f:if>
+                                    </button>
+                                </f:for>
+                            </div>
+                        </f:if>
+                    </f:if>
+                    <f:if condition="{actionPanel.tool.fields.deleteConfirmation}">
+                        <label class="ppl-et__check ppl-et__check--confirm">
+                            <input type="checkbox" name="confirm_delete" value="1">
+                            <span>{actionPanel.tool.confirmationLabel}</span>
+                        </label>
+                    </f:if>
+
+                    <f:if condition="{actionPanel.tool.showDeeplSettings}">
+                        <div class="ppl-et__deepl-settings" data-role="deepl-settings">
+                            <label for="source_language"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.sourceLanguage" /></label>
+                            <select id="source_language" name="source_language" class="form-control" data-role="source-language">
+                                <f:for each="{translationOptions.sourceLanguages}" as="languageLabel" key="languageCode">
+                                    <f:if condition="{formData.sourceLanguage} == {languageCode}">
+                                        <f:then><option value="{languageCode}" selected="selected">{languageLabel} ({languageCode})</option></f:then>
+                                        <f:else><option value="{languageCode}">{languageLabel} ({languageCode})</option></f:else>
+                                    </f:if>
+                                </f:for>
+                            </select>
+                            <label for="target_language"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.targetOverride" /></label>
+                            <select id="target_language" name="target_language" class="form-control" data-role="target-language">
+                                <f:if condition="{formData.targetLanguage} == ''">
+                                    <f:then><option value="" selected="selected"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:option.autoFromXlfLocale" /></option></f:then>
+                                    <f:else><option value=""><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:option.autoFromXlfLocale" /></option></f:else>
+                                </f:if>
+                                <f:for each="{translationOptions.targetLanguages}" as="languageLabel" key="languageCode">
+                                    <f:if condition="{formData.targetLanguage} == {languageCode}">
+                                        <f:then><option value="{languageCode}" selected="selected">{languageLabel} ({languageCode})</option></f:then>
+                                        <f:else><option value="{languageCode}">{languageLabel} ({languageCode})</option></f:else>
+                                    </f:if>
+                                </f:for>
+                            </select>
+                            <label for="glossary_id"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.glossaryId" /></label>
+                            <select id="glossary_id" name="glossary_id" class="form-control" data-role="glossary-select">
+                                <option value=""><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:option.noGlossary" /></option>
+                            </select>
+                            <span class="ppl-et__hint" data-role="glossary-status"></span>
+                            <label for="style_rule_id"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.styleRuleId" /></label>
+                            <select id="style_rule_id" name="style_rule_id" class="form-control" data-role="style-rule-select">
+                                <option value=""><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:option.noStyleRule" /></option>
+                            </select>
+                            <span class="ppl-et__hint" data-role="style-rule-status"></span>
+                            <label for="tag_handling"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.tagHandling" /></label>
+                            <select id="tag_handling" name="tag_handling" class="form-control">
+                                <option value=""><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:option.plainText" /></option>
+                                <f:for each="{translationOptions.tagHandlingOptions}" as="tagHandlingLabel" key="tagHandlingValue">
+                                    <option value="{tagHandlingValue}">{tagHandlingLabel}</option>
+                                </f:for>
+                            </select>
+                            <label for="custom_instructions"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.customInstructions" /></label>
+                            <textarea id="custom_instructions" name="custom_instructions" class="form-control" rows="3">{formData.customInstructions}</textarea>
+                            <label class="ppl-et__check">
+                                <input type="checkbox" required="required">
+                                <span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.confirmDeeplQuota" /></span>
+                            </label>
+                        </div>
+                    </f:if>
+
+                    <f:if condition="{actionPanel.tool.actionCommand}">
+                        <f:if condition="{actionPanel.tool.actionDisabled}">
+                            <f:then><button class="btn btn-default" type="button" disabled="disabled">{actionPanel.tool.actionLabel}</button></f:then>
+                            <f:else><button class="btn btn-primary" type="submit" name="module_action" value="{actionPanel.tool.actionCommand}">{actionPanel.tool.actionLabel}</button></f:else>
+                        </f:if>
+                    </f:if>
+                </section>
+
+                <f:if condition="{preview.hasContent}">
+                    <section class="ppl-et__panel">
+                        <h2><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:section.suggestionReady" /></h2>
+                        <input type="hidden" name="resolution_action" value="{preview.resolutionAction}">
+                        <dl class="ppl-et__facts">
+                            <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:preview.affectedFiles" /></dt>
+                            <dd>{preview.affectedFileCount}</dd>
+                            <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:preview.appends" /></dt>
+                            <dd>{preview.appendCount}</dd>
+                            <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:preview.updates" /></dt>
+                            <dd>{preview.updateCount}</dd>
+                            <dt><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:preview.deletes" /></dt>
+                            <dd>{preview.deleteCount}</dd>
+                            <dt class="ppl-et__facts-wide-label"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:preview.backupRoot" /></dt>
+                            <dd class="ppl-et__facts-wide-value"><code>{preview.backupRoot}</code></dd>
+                        </dl>
+                        <f:for each="{preview.errors}" as="previewError">
+                            <div class="ppl-et__message ppl-et__message--warning">{previewError}</div>
+                        </f:for>
+                        <div class="ppl-et__operation-list">
+                            <f:for each="{preview.operations}" as="operation">
+                                <div class="ppl-et__operation">
+                                    <strong>{operation.operationLabel}</strong>
+                                    <code>{operation.languageFile}:{operation.displayTransUnitId}</code>
+                                    <span>{operation.targetValue}</span>
+                                </div>
+                            </f:for>
+                        </div>
+                        <label class="ppl-et__check">
+                            <input type="checkbox" name="confirm_write" value="1">
+                            <span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.confirmWrite" /></span>
+                        </label>
+                        <f:if condition="{safety.production}">
+                            <label class="ppl-et__check">
+                                <input type="checkbox" name="confirm_production_write" value="1">
+                                <span><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:field.confirmProductionWrite" /></span>
+                            </label>
+                        </f:if>
+                        <div class="ppl-et__actions">
+                            <button class="btn btn-warning" type="submit" name="module_action" value="write_selected"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.writeSelected" /></button>
+                            <button class="btn btn-default" type="submit" name="module_action" value="discard_suggestions"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.discardSuggestion" /></button>
+                        </div>
+                    </section>
+                </f:if>
+            </aside>
+            <script type="application/json" data-role="glossary-options-json"><f:format.raw>{translationOptions.glossaryOptionsByCombinationJson}</f:format.raw></script>
+            <script type="application/json" data-role="style-rule-options-json"><f:format.raw>{translationOptions.styleRuleOptionsByLanguageJson}</f:format.raw></script>
+        </form>
+    </div>
+</html>

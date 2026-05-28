@@ -1,0 +1,2 @@
+# cat=basic//; type=boolean; label=Allow production writes: Keep disabled unless this instance should write XLF files in production after explicit confirmation.
+allowProductionWrites = 0
