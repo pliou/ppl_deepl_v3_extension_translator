@@ -12,7 +12,8 @@ final class ExtensionPathResolver
     private const LOCAL_ROOTS = ['packages', 'extensions', 'local', 'typo3conf/ext'];
 
     public function __construct(
-        private readonly EnvironmentGuard $environmentGuard
+        private readonly EnvironmentGuard $environmentGuard,
+        private readonly ExtensionMetadataResolver $extensionMetadataResolver
     ) {}
 
     public function resolve(string $inputPath): ScanScope
@@ -93,9 +94,10 @@ final class ExtensionPathResolver
             ];
 
             foreach ($this->findLocalExtensionPaths($projectRoot . '/' . $root, $root) as $extensionPath) {
+                $absoluteExtensionPath = $projectRoot . '/' . $extensionPath;
                 $options[] = [
                     'path' => $extensionPath,
-                    'label' => $extensionPath,
+                    'label' => $this->extensionOptionLabel($absoluteExtensionPath, false),
                     'group' => 'Local extensions',
                     'exists' => true,
                     'readOnly' => false,
@@ -105,9 +107,10 @@ final class ExtensionPathResolver
 
         $vendorOptions = [];
         foreach ($this->findVendorPackagePaths($projectRoot . '/vendor') as $vendorPackagePath) {
+            $absoluteVendorPackagePath = $projectRoot . '/' . $vendorPackagePath;
             $vendorOptions[] = [
                 'path' => $vendorPackagePath,
-                'label' => $vendorPackagePath . ' (vendor, read-only)',
+                'label' => $this->extensionOptionLabel($absoluteVendorPackagePath, true),
                 'group' => 'Vendor packages',
                 'exists' => true,
                 'readOnly' => true,
@@ -232,18 +235,22 @@ final class ExtensionPathResolver
 
     private function detectExtensionKey(string $absolutePath): string
     {
-        $composerPath = $absolutePath . '/composer.json';
-        if (is_file($composerPath)) {
-            $decoded = json_decode((string)file_get_contents($composerPath), true);
-            if (is_array($decoded)) {
-                $extensionKey = (string)($decoded['extra']['typo3/cms']['extension-key'] ?? '');
-                if ($extensionKey !== '') {
-                    return $extensionKey;
-                }
-            }
+        return $this->extensionMetadataResolver->forRoot($absolutePath, basename($absolutePath))['extensionKey'];
+    }
+
+    private function extensionOptionLabel(string $absolutePath, bool $readOnly): string
+    {
+        $metadata = $this->extensionMetadataResolver->forRoot($absolutePath, basename($absolutePath));
+        $label = (string)$metadata['displayName'];
+        $extensionKey = (string)$metadata['extensionKey'];
+        if ($extensionKey !== '') {
+            $label .= ' (' . $extensionKey . ')';
+        }
+        if ($readOnly) {
+            $label .= ' (vendor, read-only)';
         }
 
-        return str_replace('-', '_', basename($absolutePath));
+        return $label;
     }
 
     private function makeRelativePath(string $absolutePath, string $projectRoot): string

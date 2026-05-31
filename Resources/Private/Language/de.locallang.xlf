@@ -1,114 +1,156 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff version="1.0">
     <file source-language="en" target-language="de" datatype="plaintext" original="messages" date="2026-05-25T00:00:00Z" product-name="ppl_deepl_v3_extension_translator">
-        <header/>
+        <header />
         <body>
             <trans-unit id="module.root.title"><source>PPL DeepL V3</source><target>PPL DeepL V3</target></trans-unit>
             <trans-unit id="module.root.description"><source>PPL DeepL V3 tools.</source><target>PPL DeepL V3 Werkzeuge.</target></trans-unit>
             <trans-unit id="module.extensionTranslator.title"><source>Extension Translator</source><target>Extension Translator</target></trans-unit>
             <trans-unit id="module.extensionTranslator.description"><source>Audit and update TYPO3 extension XLF files.</source><target>TYPO3-Extension-XLF-Dateien prüfen und aktualisieren.</target></trans-unit>
-            <trans-unit id="label.environment"><source>Environment</source><target>Umgebung</target></trans-unit>
             <trans-unit id="label.selectedRows"><source>Selected rows</source><target>Ausgewählte Zeilen</target></trans-unit>
-            <trans-unit id="label.productionWrites"><source>Production writes</source><target>Production-Writes</target></trans-unit>
             <trans-unit id="status.deeplConfigured"><source>DeepL configured</source><target>DeepL konfiguriert</target></trans-unit>
             <trans-unit id="status.deeplMissing"><source>DeepL missing</source><target>DeepL fehlt</target></trans-unit>
-            <trans-unit id="status.writable"><source>Writable</source><target>Schreibbar</target></trans-unit>
-            <trans-unit id="status.readOnly"><source>Read-only</source><target>Nur lesbar</target></trans-unit>
-            <trans-unit id="status.allowed"><source>Allowed</source><target>Erlaubt</target></trans-unit>
-            <trans-unit id="status.blocked"><source>Blocked</source><target>Blockiert</target></trans-unit>
-            <trans-unit id="section.scanScope"><source>Scan scope</source><target>Scan-Bereich</target></trans-unit>
-            <trans-unit id="section.xlfFiles"><source>XLF files</source><target>XLF-Dateien</target></trans-unit>
-            <trans-unit id="section.safety"><source>Safety</source><target>Sicherheit</target></trans-unit>
-            <trans-unit id="section.translationSettings"><source>Translation settings</source><target>Übersetzungseinstellungen</target></trans-unit>
-            <trans-unit id="section.preview"><source>Write preview</source><target>Schreibvorschau</target></trans-unit>
-            <trans-unit id="section.keySourceReview"><source>Keys without XLF source</source><target>Keys ohne XLF-Source</target></trans-unit>
-            <trans-unit id="section.issueInfo"><source>Issue info</source><target>Issue-Info</target></trans-unit>
-            <trans-unit id="section.solutionTools"><source>Solution tools</source><target>Lösungswerkzeuge</target></trans-unit>
-            <trans-unit id="section.suggestionReady"><source>Suggestion ready</source><target>Vorschlag bereit</target></trans-unit>
+            
+            
+            
+            
+            
+            
+            
+            
+            
             <trans-unit id="section.issueTypeTabs"><source>Issue type tabs</source><target>Issue-Typ-Tabs</target></trans-unit>
             <trans-unit id="section.solutionStrategies"><source>Solution strategies</source><target>Lösungsstrategien</target></trans-unit>
-            <trans-unit id="message.keySourceReview"><source>These selected rows have no source text in XLF. Confirm that the listed keys are suitable text input before sending them to DeepL.</source><target>Diese ausgewählten Zeilen haben keinen Source-Text in XLF. Bestätige, dass die gelisteten Keys als Textgrundlage geeignet sind, bevor sie an DeepL gesendet werden.</target></trans-unit>
-            <trans-unit id="message.keyMismatchConflict"><source>Both the selected code key and at least one matching XLF key are used. Create a second XLF unit only if both keys should remain; otherwise change the code to one shared key.</source><target>Sowohl der ausgewählte Code-Key als auch mindestens ein passender XLF-Key werden verwendet. Lege nur dann eine zweite XLF-Unit an, wenn beide Keys erhalten bleiben sollen; andernfalls ändere den Code auf einen gemeinsamen Key.</target></trans-unit>
+            
+            <trans-unit id="message.keyMismatchConflict"><source>Both the selected key and at least one matching XLF key are used. Create an alias unit only if both keys should remain; otherwise change the selected key to the matching key.</source><target>Sowohl der ausgewählte Key als auch mindestens ein passender XLF-Key werden verwendet. Lege nur dann eine Alias-Unit an, wenn beide Keys erhalten bleiben sollen; andernfalls ändere den ausgewählten Key auf den passenden Key.</target></trans-unit>
+            <trans-unit id="message.invalidFormToken"><source>The form token is invalid. Please reload the module and try again.</source><target>Das Formular-Token ist ungueltig. Lade das Modul neu und versuche es erneut.</target></trans-unit>
+            <trans-unit id="message.getActionRequiresPost"><source>Action ignored. Write actions require a protected POST request.</source><target>Aktion ignoriert. Schreibaktionen benoetigen eine geschuetzte POST-Anfrage.</target></trans-unit>
             <trans-unit id="field.scanPath"><source>Path</source><target>Pfad</target></trans-unit>
             <trans-unit id="field.scanScopePreset"><source>Known paths</source><target>Bekannte Pfade</target></trans-unit>
-            <trans-unit id="field.valueMode"><source>Value mode</source><target>Wertmodus</target></trans-unit>
+            
             <trans-unit id="field.sourceLanguage"><source>Source language</source><target>Ausgangssprache</target></trans-unit>
             <trans-unit id="field.targetOverride"><source>Target override</source><target>Ziel-Override</target></trans-unit>
             <trans-unit id="field.glossaryId"><source>Glossary ID</source><target>Glossar-ID</target></trans-unit>
             <trans-unit id="field.styleRuleId"><source>Style rule ID</source><target>Style-Rule-ID</target></trans-unit>
-            <trans-unit id="field.tagHandling"><source>Tag handling</source><target>Tag Handling</target></trans-unit>
-            <trans-unit id="field.customInstructions"><source>Custom instructions</source><target>Custom Instructions</target></trans-unit>
+            <trans-unit id="field.tagHandling"><source>Tag handling</source><target>Tag-Handling</target></trans-unit>
+            <trans-unit id="field.customInstructions"><source>Custom instructions</source><target>Eigene Anweisungen</target></trans-unit>
             <trans-unit id="field.manualSourceText"><source>Manual source text</source><target>Manueller Source-Text</target></trans-unit>
             <trans-unit id="field.manualTargetText"><source>Manual target text</source><target>Manueller Zieltext</target></trans-unit>
             <trans-unit id="field.targetKey"><source>Target key</source><target>Ziel-Key</target></trans-unit>
-            <trans-unit id="field.confirmKeySourceTranslation"><source>I reviewed these keys and confirm they can be sent to DeepL as source text.</source><target>Ich habe diese Keys geprüft und bestätige, dass sie als Source-Text an DeepL gesendet werden können.</target></trans-unit>
-            <trans-unit id="field.confirmWrite"><source>I reviewed the generated XLF changes.</source><target>Ich habe die generierten XLF-Änderungen geprüft.</target></trans-unit>
-            <trans-unit id="field.confirmProductionWrite"><source>I confirm this production write.</source><target>Ich bestätige diesen Production-Write.</target></trans-unit>
-            <trans-unit id="field.confirmDeeplQuota"><source>I understand this action uses DeepL quota.</source><target>Ich verstehe, dass diese Aktion DeepL-Kontingent verbraucht.</target></trans-unit>
             <trans-unit id="option.autoFromXlfLocale"><source>Auto from XLF locale</source><target>Automatisch aus XLF-Locale</target></trans-unit>
             <trans-unit id="option.noGlossary"><source>No glossary</source><target>Kein Glossar</target></trans-unit>
             <trans-unit id="option.noStyleRule"><source>No style rule</source><target>Keine Stilregel</target></trans-unit>
-            <trans-unit id="option.plainText"><source>Plain text</source><target>Plain Text</target></trans-unit>
+            <trans-unit id="option.plainText"><source>Plain text</source><target>Klartext</target></trans-unit>
             <trans-unit id="placeholder.fileSearch"><source>Search extension, file or locale</source><target>Extension, Datei oder Locale suchen</target></trans-unit>
             <trans-unit id="placeholder.findingSearch"><source>Search findings</source><target>Findings suchen</target></trans-unit>
-            <trans-unit id="mode.todoKey"><source>Create TODO suggestion</source><target>TODO-Vorschlag erstellen</target></trans-unit>
-            <trans-unit id="mode.key"><source>Create key-based suggestion</source><target>Key-basierten Vorschlag erstellen</target></trans-unit>
-            <trans-unit id="mode.deepl"><source>Create DeepL suggestion</source><target>DeepL-Vorschlag erstellen</target></trans-unit>
+            
+            
+            
             <trans-unit id="action.scan"><source>Scan</source><target>Scannen</target></trans-unit>
             <trans-unit id="action.restartScan"><source>Restart scan</source><target>Scan neu starten</target></trans-unit>
             <trans-unit id="action.selectAll"><source>Select all</source><target>Alle auswählen</target></trans-unit>
             <trans-unit id="action.deselectAll"><source>Deselect all</source><target>Alle abwählen</target></trans-unit>
-            <trans-unit id="action.selectAllVisible"><source>Select all visible</source><target>Alle sichtbaren auswählen</target></trans-unit>
+            
             <trans-unit id="action.selectAllVisibleRows"><source>Select all visible rows</source><target>Alle sichtbaren Zeilen auswählen</target></trans-unit>
             <trans-unit id="action.clearSelection"><source>Clear selection</source><target>Auswahl leeren</target></trans-unit>
-            <trans-unit id="action.preview"><source>Create suggestion</source><target>Vorschlag erstellen</target></trans-unit>
-            <trans-unit id="action.translateSelected"><source>Create DeepL suggestion</source><target>DeepL-Vorschlag erstellen</target></trans-unit>
-            <trans-unit id="action.writeSelected"><source>Write suggestion to XLF</source><target>Vorschlag in XLF schreiben</target></trans-unit>
-            <trans-unit id="action.discardSuggestion"><source>Discard suggestion</source><target>Vorschlag verwerfen</target></trans-unit>
+            
+            
+            
+            
             <trans-unit id="tab.overview"><source>Overview</source><target>Übersicht</target></trans-unit>
-            <trans-unit id="tab.missingKeys"><source>Missing source units</source><target>Fehlende Source-Units</target></trans-unit>
-            <trans-unit id="tab.localeGaps"><source>Locale gaps</source><target>Locale-Lücken</target></trans-unit>
-            <trans-unit id="tab.equalValues"><source>Equal values</source><target>Gleiche Werte</target></trans-unit>
-            <trans-unit id="tab.todoValues"><source>TODO values</source><target>TODO-Werte</target></trans-unit>
-            <trans-unit id="tab.extraKeys"><source>Unused candidates</source><target>Ungenutzte Kandidaten</target></trans-unit>
-            <trans-unit id="tab.translateSelected"><source>Create suggestions</source><target>Vorschläge erstellen</target></trans-unit>
+            
+            
+            
+            
+            
+            
             <trans-unit id="summary.xlfFiles"><source>XLF files</source><target>XLF-Dateien</target></trans-unit>
             <trans-unit id="summary.codeKeys"><source>Code keys</source><target>Code-Keys</target></trans-unit>
             <trans-unit id="summary.keyless"><source>Keyless</source><target>Ohne Key</target></trans-unit>
-            <trans-unit id="summary.mismatches"><source>Mismatches</source><target>Abweichungen</target></trans-unit>
-            <trans-unit id="summary.missing"><source>Missing</source><target>Fehlend</target></trans-unit>
+            
+            
+            
+            
+            <trans-unit id="summary.todoSource"><source>TODO source</source><target>TODO-Source</target></trans-unit>
+            <trans-unit id="summary.todoTarget"><source>TODO target</source><target>TODO-Target</target></trans-unit>
+            
             <trans-unit id="summary.missingSource"><source>Missing source</source><target>Fehlender Source</target></trans-unit>
             <trans-unit id="summary.missingTarget"><source>Missing target</source><target>Fehlendes Target</target></trans-unit>
-            <trans-unit id="summary.localeGaps"><source>Locale gaps</source><target>Locale-Lücken</target></trans-unit>
-            <trans-unit id="summary.equal"><source>Equal</source><target>Gleich</target></trans-unit>
-            <trans-unit id="summary.todo"><source>TODO</source><target>TODO</target></trans-unit>
+            
+            
+            
             <trans-unit id="summary.extra"><source>Unused candidates</source><target>Ungenutzte Kandidaten</target></trans-unit>
-            <trans-unit id="summary.writable"><source>Writable</source><target>Schreibbar</target></trans-unit>
             <trans-unit id="column.issue"><source>Issue</source><target>Issue</target></trans-unit>
+            <trans-unit id="column.select"><source>Select</source><target>Auswahl</target></trans-unit>
             <trans-unit id="column.file"><source>File</source><target>Datei</target></trans-unit>
+            <trans-unit id="column.extension"><source>Extension</source><target>Extension</target></trans-unit>
             <trans-unit id="column.locale"><source>Locale</source><target>Locale</target></trans-unit>
             <trans-unit id="column.key"><source>Key</source><target>Key</target></trans-unit>
             <trans-unit id="column.sourceState"><source>Source state</source><target>Source-Status</target></trans-unit>
             <trans-unit id="column.source"><source>Source</source><target>Source</target></trans-unit>
             <trans-unit id="column.current"><source>Current target</source><target>Aktuelles Target</target></trans-unit>
             <trans-unit id="column.relatedCandidates"><source>Related candidates</source><target>Verwandte Kandidaten</target></trans-unit>
-            <trans-unit id="column.suggestion"><source>Suggestion</source><target>Vorschlag</target></trans-unit>
-            <trans-unit id="column.status"><source>Status</source><target>Status</target></trans-unit>
-            <trans-unit id="label.issueType"><source>Issue type</source><target>Issue-Typ</target></trans-unit>
-            <trans-unit id="label.visibleRows"><source>Visible rows</source><target>Sichtbare Zeilen</target></trans-unit>
-            <trans-unit id="label.canChange"><source>Can change</source><target>Änderbar</target></trans-unit>
+            <trans-unit id="column.sourceHash"><source>Source hash</source><target>Source-Hash</target></trans-unit>
+            <trans-unit id="column.savedAt"><source>Saved at</source><target>Gespeichert am</target></trans-unit>
+            
+            
+            
             <trans-unit id="label.needsSource"><source>Needs source</source><target>Benötigt Source</target></trans-unit>
-            <trans-unit id="label.cannotChange"><source>Cannot change</source><target>Nicht änderbar</target></trans-unit>
             <trans-unit id="label.selectedKeyUsage"><source>Selected key usage</source><target>Nutzung des ausgewählten Keys</target></trans-unit>
-            <trans-unit id="label.possibleExistingKey"><source>Possible existing key</source><target>Möglicher vorhandener Key</target></trans-unit>
+            
             <trans-unit id="label.alsoUsedInCode"><source>Also used in code</source><target>Auch im Code verwendet</target></trans-unit>
             <trans-unit id="label.suggestedMatchingKeys"><source>Suggested matching keys</source><target>Vorgeschlagene passende Keys</target></trans-unit>
-            <trans-unit id="status.changeable"><source>Changeable</source><target>Änderbar</target></trans-unit>
-            <trans-unit id="preview.affectedFiles"><source>Affected files</source><target>Betroffene Dateien</target></trans-unit>
-            <trans-unit id="preview.appends"><source>Appends</source><target>Neue Zeilen</target></trans-unit>
-            <trans-unit id="preview.updates"><source>Updates</source><target>Updates</target></trans-unit>
-            <trans-unit id="preview.deletes"><source>Deletes</source><target>Löschungen</target></trans-unit>
-            <trans-unit id="preview.backupRoot"><source>Backup location</source><target>Backup-Speicherort</target></trans-unit>
+            <trans-unit id="label.blacklistEntries"><source>Blacklist entries</source><target>Blacklist-Einträge</target></trans-unit>
+            
+            
+            
+            
+            
+            <trans-unit id="section.projectScan"><source>Project scan</source><target>Projekt-Scan</target></trans-unit>
+            <trans-unit id="section.files"><source>Files</source><target>Dateien</target></trans-unit>
+            <trans-unit id="section.issues"><source>Issues</source><target>Issues</target></trans-unit>
+            <trans-unit id="section.metrics"><source>Metrics</source><target>Kennzahlen</target></trans-unit>
+            <trans-unit id="section.problemRows"><source>Problem rows</source><target>Problemzeilen</target></trans-unit>
+            <trans-unit id="section.selectedIssue"><source>Selected issue</source><target>Ausgewähltes Issue</target></trans-unit>
+            <trans-unit id="section.relatedCandidate"><source>Related candidate</source><target>Verwandter Kandidat</target></trans-unit>
+            <trans-unit id="section.solution"><source>Solution</source><target>Lösung</target></trans-unit>
+            <trans-unit id="section.permanentIgnores"><source>Permanent ignore list</source><target>Permanente Ignore-Liste</target></trans-unit>
+            <trans-unit id="tab.other"><source>Other</source><target>Weitere</target></trans-unit>
+            <trans-unit id="issue.keylessUnits"><source>Keyless units</source><target>Units ohne Key</target></trans-unit>
+            <trans-unit id="issue.possibleKeyMismatch"><source>Possible key mismatch</source><target>Möglicher Key-Mismatch</target></trans-unit>
+            <trans-unit id="issue.missingSourceLocaleCandidate"><source>Missing source, locale candidate</source><target>Fehlende Source, Locale-Kandidat</target></trans-unit>
+            <trans-unit id="issue.missingSource"><source>Missing source</source><target>Fehlende Source</target></trans-unit>
+            <trans-unit id="issue.missingTranslationUnit"><source>Missing translation unit</source><target>Fehlende Translation-Unit</target></trans-unit>
+            <trans-unit id="issue.localeGaps"><source>Locale gaps</source><target>Locale-Lücken</target></trans-unit>
+            <trans-unit id="issue.missingTarget"><source>Missing target</source><target>Fehlendes Target</target></trans-unit>
+            <trans-unit id="issue.todoSource"><source>TODO source</source><target>TODO-Source</target></trans-unit>
+            <trans-unit id="issue.todoTarget"><source>TODO target</source><target>TODO-Target</target></trans-unit>
+            <trans-unit id="issue.equalValue"><source>Equal value</source><target>Gleicher Wert</target></trans-unit>
+            <trans-unit id="issue.unusedCandidates"><source>Unused candidates</source><target>Ungenutzte Kandidaten</target></trans-unit>
+            <trans-unit id="issue.ignorePermanently"><source>Ignore permanently</source><target>Dauerhaft ignorieren</target></trans-unit>
+            <trans-unit id="issue.reviewFindings"><source>Review findings</source><target>Findings prüfen</target></trans-unit>
+            <trans-unit id="issue.unknown"><source>Unknown issue</source><target>Unbekanntes Issue</target></trans-unit>
+            <trans-unit id="action.rescan"><source>Rescan</source><target>Neu scannen</target></trans-unit>
+            <trans-unit id="action.selectedOnly"><source>Selected only</source><target>Nur ausgewählte</target></trans-unit>
+            <trans-unit id="action.selectVisible"><source>Select visible</source><target>Sichtbare auswählen</target></trans-unit>
+            <trans-unit id="action.previousPage"><source>Previous page</source><target>Vorherige Seite</target></trans-unit>
+            <trans-unit id="action.nextPage"><source>Next page</source><target>Nächste Seite</target></trans-unit>
+            <trans-unit id="action.deleteBlacklisting"><source>Delete blacklisting</source><target>Blacklisting löschen</target></trans-unit>
+            <trans-unit id="field.localeFilter"><source>Locale filter</source><target>Locale-Filter</target></trans-unit>
+            <trans-unit id="field.stateFilter"><source>State filter</source><target>Status-Filter</target></trans-unit>
+            <trans-unit id="field.rowsPerPage"><source>Rows per page</source><target>Zeilen pro Seite</target></trans-unit>
+            <trans-unit id="field.strategy"><source>Strategy</source><target>Strategie</target></trans-unit>
+            <trans-unit id="option.allLocales"><source>All locales</source><target>Alle Locales</target></trans-unit>
+            <trans-unit id="option.allStates"><source>All states</source><target>Alle Status</target></trans-unit>
+            <trans-unit id="label.keys"><source>keys</source><target>Keys</target></trans-unit>
+            <trans-unit id="placeholder.findingSearchRich"><source>Search by text, key, or file</source><target>Nach Text, Key oder Datei suchen</target></trans-unit>
+            <trans-unit id="message.permanentIgnores"><source>These entries are hidden by the permanent ignore list. Delete blacklist entries to show them in scans again.</source><target>Diese Einträge werden durch die permanente Ignore-Liste ausgeblendet. Lösche Blacklist-Einträge, damit sie wieder im Scan erscheinen.</target></trans-unit>
+            <trans-unit id="message.noPermanentIgnores"><source>No permanent ignore entries saved.</source><target>Keine permanenten Ignore-Einträge gespeichert.</target></trans-unit>
+            <trans-unit id="message.deleteBlacklisting"><source>Select entries in the list and delete the blacklisting to restore the default scanner result.</source><target>Wähle Einträge in der Liste aus und lösche das Blacklisting, um das normale Scanner-Ergebnis wiederherzustellen.</target></trans-unit>
+            <trans-unit id="extconf.allowProductionWrites">
+                <source>Allow production writes. Keep disabled unless this instance may write XLF files in production. Write actions are protected by backend permissions and form tokens.</source>
+                <target>Produktions-Schreibzugriffe erlauben. Deaktiviert lassen, au?er diese Instanz darf XLF-Dateien in Produktion schreiben. Schreibaktionen sind durch Backend-Berechtigungen und Formular-Tokens gesch?tzt.</target>
+            </trans-unit>
         </body>
     </file>
 </xliff>

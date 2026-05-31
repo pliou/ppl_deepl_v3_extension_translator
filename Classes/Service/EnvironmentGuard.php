@@ -4,22 +4,20 @@ declare(strict_types=1);
 
 namespace Ppl\PplDeeplV3ExtensionTranslator\Service;
 
+use TYPO3\CMS\Core\Configuration\ExtensionConfiguration;
 use TYPO3\CMS\Core\Core\Environment;
 
 final class EnvironmentGuard
 {
     private const EXTENSION_KEY = 'ppl_deepl_v3_extension_translator';
 
+    public function __construct(
+        private readonly ExtensionConfiguration $extensionConfiguration
+    ) {}
+
     public function isProduction(): bool
     {
         return Environment::getContext()->isProduction();
-    }
-
-    public function allowProductionWrites(): bool
-    {
-        $configuration = $GLOBALS['TYPO3_CONF_VARS']['EXTENSIONS'][self::EXTENSION_KEY] ?? [];
-
-        return is_array($configuration) && (bool)($configuration['allowProductionWrites'] ?? false);
     }
 
     public function canWrite(bool $readOnly): bool
@@ -28,7 +26,11 @@ final class EnvironmentGuard
             return false;
         }
 
-        return !$this->isProduction() || $this->allowProductionWrites();
+        if (!$this->isProduction()) {
+            return true;
+        }
+
+        return $this->productionWritesAllowed();
     }
 
     public function getWriteBlockReason(bool $readOnly): string
@@ -37,7 +39,7 @@ final class EnvironmentGuard
             return 'Read-only scope';
         }
 
-        if ($this->isProduction() && !$this->allowProductionWrites()) {
+        if ($this->isProduction() && !$this->productionWritesAllowed()) {
             return 'Production writes are disabled';
         }
 
@@ -49,7 +51,22 @@ final class EnvironmentGuard
         return [
             'environment' => (string)Environment::getContext(),
             'production' => $this->isProduction(),
-            'productionWritesAllowed' => $this->allowProductionWrites(),
+            'productionWritesAllowed' => $this->productionWritesAllowed(),
         ];
+    }
+
+    private function productionWritesAllowed(): bool
+    {
+        try {
+            $settings = $this->extensionConfiguration->get(self::EXTENSION_KEY);
+        } catch (\Throwable) {
+            return false;
+        }
+
+        if (!is_array($settings)) {
+            return false;
+        }
+
+        return filter_var($settings['allowProductionWrites'] ?? false, FILTER_VALIDATE_BOOLEAN);
     }
 }

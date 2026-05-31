@@ -13,7 +13,6 @@ final class WritePreview
     public function __construct(
         public readonly array $operations,
         public readonly array $errors,
-        public readonly string $backupRoot,
         public readonly string $valueMode,
         public readonly string $resolutionAction = ''
     ) {}
@@ -29,21 +28,16 @@ final class WritePreview
         $appends = 0;
         $updates = 0;
         $deletes = 0;
-        $creates = 0;
-
         foreach ($this->operations as $operation) {
             $files[$operation->languageFile] = true;
             if ($operation->operationType === 'append') {
                 $appends++;
             }
-            if ($operation->operationType === 'update') {
+            if (in_array($operation->operationType, ['update', 'update_source', 'change_xlf_key', 'replace_code_key'], true)) {
                 $updates++;
             }
             if ($operation->operationType === 'delete') {
                 $deletes++;
-            }
-            if ($operation->operationType === 'create_file') {
-                $creates++;
             }
         }
 
@@ -51,7 +45,6 @@ final class WritePreview
             'operations' => array_map(static fn(WriteOperation $operation): array => $operation->toArray(), $this->operations),
             'errors' => $this->errors,
             'hasContent' => $this->operations !== [] || $this->errors !== [],
-            'backupRoot' => $this->backupRoot,
             'valueMode' => $this->valueMode,
             'resolutionAction' => $this->resolutionAction !== '' ? $this->resolutionAction : $this->valueMode,
             'operationCount' => count($this->operations),
@@ -59,7 +52,6 @@ final class WritePreview
             'appendCount' => $appends,
             'updateCount' => $updates,
             'deleteCount' => $deletes,
-            'createFileCount' => $creates,
         ];
     }
 }

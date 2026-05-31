@@ -35,6 +35,7 @@ final class SmokeCommand extends Command
             ->addOption('run-matrix', null, InputOption::VALUE_NONE, 'Run the smoke matrix.')
             ->addOption('case', null, InputOption::VALUE_REQUIRED, 'Run only one case id, for example SMK-001.')
             ->addOption('artifact-root', null, InputOption::VALUE_REQUIRED, 'Artifact root. Defaults to var/smoke/extension-translator-taxonomy/<timestamp>.')
+            ->addOption('keep-fake', null, InputOption::VALUE_NONE, 'Keep the Fake DeepL smoke context active after the command exits.')
             ->addOption('deactivate-fake', null, InputOption::VALUE_NONE, 'Deactivate the persistent Fake DeepL smoke context and exit.');
     }
 
@@ -65,26 +66,39 @@ final class SmokeCommand extends Command
             $output->writeln('<info>Fixture restored.</info>');
         }
 
-        $this->context->activate($artifactRoot);
-        $output->writeln('<info>Fake DeepL smoke context active.</info>');
+        $keepFake = (bool)$input->getOption('keep-fake');
+        $runMatrix = (bool)$input->getOption('run-matrix');
+        if ($runMatrix || $keepFake) {
+            $this->context->activate($artifactRoot);
+            $output->writeln('<info>Fake DeepL smoke context active.</info>');
+        }
         $output->writeln('Fixture: ' . $fixturePath);
         $output->writeln('Artifact root: ' . $artifactRoot);
 
-        if ((bool)$input->getOption('run-matrix')) {
-            $summary = $this->matrixRunner->runMatrix($fixturePath, $artifactRoot, $input->getOption('case') ? (string)$input->getOption('case') : null);
-            $failed = array_filter($summary['cases'], static fn(array $case): bool => $case['status'] !== 'PASS');
-            $output->writeln(sprintf(
-                '<info>Smoke matrix finished: %d passed, %d failed.</info>',
-                count($summary['cases']) - count($failed),
-                count($failed)
-            ));
-            $output->writeln('Summary: ' . $artifactRoot . '/summary.md');
+        try {
+            if ($runMatrix) {
+                $summary = $this->matrixRunner->runMatrix($fixturePath, $artifactRoot, $input->getOption('case') ? (string)$input->getOption('case') : null);
+                $failed = array_filter($summary['cases'], static fn(array $case): bool => $case['status'] !== 'PASS');
+                $output->writeln(sprintf(
+                    '<info>Smoke matrix finished: %d passed, %d failed.</info>',
+                    count($summary['cases']) - count($failed),
+                    count($failed)
+                ));
+                $output->writeln('Summary: ' . $artifactRoot . '/summary.md');
 
-            return $failed === [] ? Command::SUCCESS : Command::FAILURE;
+                return $failed === [] ? Command::SUCCESS : Command::FAILURE;
+            }
+
+            $output->writeln('<comment>Pass --run-matrix to execute smoke cases.</comment>');
+            if ($keepFake) {
+                $output->writeln('<comment>Fake DeepL smoke context remains active because --keep-fake was used.</comment>');
+            }
+
+            return Command::SUCCESS;
+        } finally {
+            if ($runMatrix && !$keepFake) {
+                $this->context->deactivate();
+            }
         }
-
-        $output->writeln('<comment>Pass --run-matrix to execute smoke cases.</comment>');
-
-        return Command::SUCCESS;
     }
 }

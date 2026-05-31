@@ -28,7 +28,7 @@ final class IgnoreRuleService
     public function addRule(TranslationFinding $finding, string $ruleType, string $note = ''): void
     {
         $rules = $this->readRules();
-        $rules[] = [
+        $rule = [
             'ruleType' => $ruleType,
             'issueType' => $finding->baseIssueType !== '' ? $finding->baseIssueType : $finding->issueType,
             'effectiveIssueType' => $finding->issueType,
@@ -40,6 +40,8 @@ final class IgnoreRuleService
             'note' => $note,
             'createdAt' => date(DATE_ATOM),
         ];
+        $rule['id'] = $this->ruleId($rule);
+        $rules[] = $rule;
 
         $this->writeRules($this->deduplicateRules($rules));
     }
@@ -61,6 +63,73 @@ final class IgnoreRuleService
         }
 
         return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : [];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function readRulesForView(): array
+    {
+        return array_map(
+            function (array $rule): array {
+                $id = $this->ruleId($rule);
+                $issueType = (string)($rule['issueType'] ?? '');
+                $extensionKey = (string)($rule['extensionKey'] ?? '');
+                $languageFile = (string)($rule['languageFile'] ?? '');
+                $locale = (string)($rule['locale'] ?? '');
+                $key = (string)($rule['key'] ?? '');
+                $sourceValueHash = (string)($rule['sourceValueHash'] ?? '');
+
+                return array_merge($rule, [
+                    'id' => $id,
+                    'issueType' => $issueType,
+                    'extensionKey' => $extensionKey,
+                    'languageFile' => $languageFile,
+                    'locale' => $locale,
+                    'key' => $key,
+                    'sourceValueHash' => $sourceValueHash,
+                    'sourceValueHashShort' => $sourceValueHash !== '' ? substr($sourceValueHash, 0, 10) : '',
+                    'createdAt' => (string)($rule['createdAt'] ?? ''),
+                    'searchText' => mb_strtolower(implode(' ', [
+                        $issueType,
+                        $extensionKey,
+                        $languageFile,
+                        $locale,
+                        $key,
+                        $sourceValueHash,
+                    ])),
+                ]);
+            },
+            $this->readRules()
+        );
+    }
+
+    /**
+     * @param string[] $ids
+     */
+    public function deleteRulesByIds(array $ids): int
+    {
+        $lookup = array_fill_keys(array_map('strval', $ids), true);
+        if ($lookup === []) {
+            return 0;
+        }
+
+        $rules = $this->readRules();
+        $remaining = [];
+        $deleted = 0;
+        foreach ($rules as $rule) {
+            if (isset($lookup[$this->ruleId($rule)])) {
+                $deleted++;
+                continue;
+            }
+            $remaining[] = $rule;
+        }
+
+        if ($deleted > 0) {
+            $this->writeRules($remaining);
+        }
+
+        return $deleted;
     }
 
     /**
@@ -130,6 +199,7 @@ final class IgnoreRuleService
                 continue;
             }
             $seen[$identity] = true;
+            $rule['id'] = $this->ruleId($rule);
             $deduplicated[] = $rule;
         }
 
@@ -153,5 +223,22 @@ final class IgnoreRuleService
     private function ruleFilePath(): string
     {
         return Environment::getVarPath() . '/' . self::RULE_FILE;
+    }
+
+    /**
+     * @param array<string, mixed> $rule
+     */
+    private function ruleId(array $rule): string
+    {
+        return sha1(implode('|', [
+            (string)($rule['ruleType'] ?? ''),
+            (string)($rule['issueType'] ?? ''),
+            (string)($rule['effectiveIssueType'] ?? ''),
+            (string)($rule['extensionKey'] ?? ''),
+            (string)($rule['languageFile'] ?? ''),
+            (string)($rule['locale'] ?? ''),
+            (string)($rule['key'] ?? ''),
+            (string)($rule['sourceValueHash'] ?? ''),
+        ]));
     }
 }

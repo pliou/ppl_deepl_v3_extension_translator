@@ -10,6 +10,9 @@ use Ppl\PplDeeplV3ExtensionTranslator\Domain\Dto\XlfTransUnit;
 
 final class XlfLanguageFileReader
 {
+    private const EXCLUDED_LANGUAGE_PATH_PARTS = ['/Tests/', '/Fixtures/'];
+    private const ROOT_SCAN_FIXTURE_PACKAGES = ['ppl_et_issue_fixture', 'ppl_et_smoke_test'];
+
     /**
      * @param string[] $selectedFiles
      * @return XlfTranslationFile[]
@@ -30,6 +33,9 @@ final class XlfLanguageFileReader
 
                 $absoluteFile = str_replace('\\', '/', $file->getPathname());
                 $relativeFile = $this->normalizeRelativePath(ltrim(substr($absoluteFile, strlen($scope->absolutePath)), '/'));
+                if ($this->isExcludedLanguageFile($relativeFile, $scope->absolutePath)) {
+                    continue;
+                }
                 if ($selectedLookup !== [] && !isset($selectedLookup[$relativeFile])) {
                     continue;
                 }
@@ -169,6 +175,10 @@ final class XlfLanguageFileReader
 
             $path = str_replace('\\', '/', $item->getPathname());
             if (str_ends_with($path, '/Resources/Private/Language')) {
+                $relativePath = '/' . trim(substr($path, strlen($scopePath)), '/') . '/';
+                if ($this->isExcludedLanguageRoot($relativePath, $scopePath)) {
+                    continue;
+                }
                 $languageRoots[] = $path;
             }
         }
@@ -200,5 +210,36 @@ final class XlfLanguageFileReader
     private function normalizeRelativePath(string $path): string
     {
         return str_replace('\\', '/', trim($path, '/'));
+    }
+
+    private function isExcludedLanguageFile(string $relativeFile, string $scopePath): bool
+    {
+        return $this->isExcludedLanguageRoot('/' . trim(str_replace('\\', '/', $relativeFile), '/') . '/', $scopePath);
+    }
+
+    private function isExcludedLanguageRoot(string $relativePath, string $scopePath): bool
+    {
+        if ($this->isFixturePackageInRootScan($relativePath, $scopePath)) {
+            return true;
+        }
+
+        foreach (self::EXCLUDED_LANGUAGE_PATH_PARTS as $excludedPathPart) {
+            if (str_contains($relativePath, $excludedPathPart)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isFixturePackageInRootScan(string $relativePath, string $scopePath): bool
+    {
+        if (!in_array(basename(str_replace('\\', '/', $scopePath)), ['packages', 'extensions', 'local', 'ext'], true)) {
+            return false;
+        }
+
+        $firstSegment = explode('/', trim(str_replace('\\', '/', $relativePath), '/'))[0] ?? '';
+
+        return in_array($firstSegment, self::ROOT_SCAN_FIXTURE_PACKAGES, true);
     }
 }

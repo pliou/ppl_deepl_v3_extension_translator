@@ -70,11 +70,12 @@ final class IssueActionPlanner
             'active' => $issueKnown,
             'issueType' => $activeIssueType,
             'issueLabel' => $issueKnown ? TranslationIssueType::label($activeIssueType) : 'Review findings',
+            'issueLabelKey' => $issueKnown ? $this->issueLabelKey($activeIssueType) : 'issue.reviewFindings',
             'message' => $issueKnown && $first instanceof TranslationFinding ? $this->messageForIssueType($activeIssueType, $first) : 'Choose an issue type to review findings.',
             'visibleRows' => count($visibleFindings),
             'selectedRows' => count($selectedFindings),
             'canChangeCount' => count(array_filter($selectedFindings, static fn(TranslationFinding $finding): bool => $finding->canChange)),
-            'needsSourceCount' => count(array_filter($selectedFindings, static fn(TranslationFinding $finding): bool => trim($finding->sourceValue) === '')),
+            'needsSourceCount' => count(array_filter($selectedFindings, static fn(TranslationFinding $finding): bool => $finding->sourceStatus === SourceStatus::MANUAL_SOURCE_REQUIRED || trim($finding->sourceValue) === '')),
             'cannotChangeCount' => count(array_filter($selectedFindings, static fn(TranslationFinding $finding): bool => !$finding->canChange)),
             'currentUsages' => $this->currentUsages($selectedFindings),
             'relatedCandidates' => $this->relatedCandidates($selectedFindings),
@@ -124,7 +125,6 @@ final class IssueActionPlanner
                 'manualSource' => $strategy->requiresManualSource,
                 'manualTarget' => $strategy->requiresManualTarget,
                 'targetKey' => $strategy->requiresTargetKey,
-                'deleteConfirmation' => $strategy->destructive,
             ],
             'targetKeySuggestions' => $strategy->requiresTargetKey ? $this->targetKeySuggestions($selectedFindings !== [] ? $selectedFindings : $visibleFindings) : [],
             'showDeeplSettings' => $strategy->requiresDeepl && !$disabled,
@@ -134,7 +134,6 @@ final class IssueActionPlanner
             'actionLabel' => $this->actionLabel($strategy),
             'validationErrors' => $validationErrors,
             'destructive' => $strategy->destructive,
-            'confirmationLabel' => $strategy->confirmationLabel,
         ];
     }
 
@@ -174,52 +173,85 @@ final class IssueActionPlanner
     private function actionLabel(SolutionStrategy $strategy): string
     {
         if ($strategy->requiresDeepl) {
-            return 'Create DeepL suggestion';
-        }
-        if ($strategy->command === 'create_alias_source_unit') {
-            return 'Create matched XLF suggestion';
-        }
-        if ($strategy->command === 'ignore_finding_for_run') {
-            return 'Ignore selected in this run';
-        }
-        if (
-            str_starts_with($strategy->command, 'show_')
-            || str_starts_with($strategy->command, 'mark_')
-            || str_starts_with($strategy->command, 'add_')
-            || $strategy->command === 'always_ignore_key'
-            || $strategy->command === 'export_findings'
-        ) {
-            return $strategy->label;
+            return 'Translate and write';
         }
 
-        return 'Create suggestion';
+        return match ($strategy->command) {
+            'change_key_to_matching_key', 'replace_code_key_with_existing_key' => 'Change key to matching key',
+            'create_alias_source_unit' => 'Create alias unit',
+            'use_other_locale_as_source' => 'Write locale text as source',
+            'copy_source_unit_without_target' => 'Copy unit without translation',
+            'create_manual_translation_unit' => 'Create manual translation unit',
+            'ignore_finding_for_run' => 'Ignore selected in this run',
+            'ignore_finding_permanently' => 'Ignore permanently',
+            'enter_source_text', 'enter_source_manually' => 'Write manual source',
+            'enter_target_text' => 'Write manual target',
+            'copy_source_value' => 'Copy source to target',
+            'write_todo_target' => 'Write TODO target',
+            'prefix_with_todo' => 'Write TODO prefix',
+            'create_empty_target_unit' => 'Create empty target',
+            'enter_key_manually' => 'Assign key',
+            'link_keyless_unit_to_key' => 'Link to key',
+            'delete_invalid_unit' => 'Delete invalid unit',
+            'delete_target_locale_only' => 'Delete target locale unit',
+            'delete_translation_unit', 'delete_source_and_targets' => 'Delete translation unit',
+            default => (
+                str_starts_with($strategy->command, 'show_')
+                || str_starts_with($strategy->command, 'mark_')
+                || str_starts_with($strategy->command, 'add_')
+                || $strategy->command === 'export_findings'
+            ) ? $strategy->label : $strategy->label,
+        };
+    }
+
+    private function issueLabelKey(string $issueType): string
+    {
+        return match ($issueType) {
+            TranslationIssueType::KEYLESS_UNIT => 'issue.keylessUnits',
+            TranslationIssueType::KEY_MISMATCH_CANDIDATE => 'issue.possibleKeyMismatch',
+            TranslationIssueType::MISSING_SOURCE_FROM_LOCALE_CANDIDATE => 'issue.missingSourceLocaleCandidate',
+            TranslationIssueType::MISSING_SOURCE_UNIT => 'issue.missingSource',
+            TranslationIssueType::MISSING_TRANSLATION_UNIT => 'issue.missingTranslationUnit',
+            TranslationIssueType::LOCALE_GAP => 'issue.localeGaps',
+            TranslationIssueType::MISSING_TARGET => 'issue.missingTarget',
+            TranslationIssueType::TODO_SOURCE => 'issue.todoSource',
+            TranslationIssueType::TODO_VALUE => 'issue.todoTarget',
+            TranslationIssueType::EQUAL_VALUE => 'issue.equalValue',
+            TranslationIssueType::UNUSED_CANDIDATE => 'issue.unusedCandidates',
+            default => 'issue.unknown',
+        };
     }
 
     private function strategyMessage(SolutionStrategy $strategy): string
     {
         if ($strategy->requiresDeepl) {
-            return 'Creates suggestions only. Writing to XLF is a separate confirmation step.';
+            return 'Translates the selected rows with DeepL and writes the result to XLF immediately.';
         }
         if ($strategy->destructive) {
-            return 'This action is destructive and requires backup confirmation before a write summary is created.';
+            return 'This action changes files immediately when you run it.';
         }
 
-        return 'Select rows and create a suggestion for this strategy.';
+        return 'Select rows and run this strategy directly.';
     }
 
     private function messageForIssueType(string $issueType, TranslationFinding $finding): string
     {
+        if ($issueType === TranslationIssueType::MISSING_TRANSLATION_UNIT && !empty($finding->metadata['hardcodedConfigLabel'])) {
+            return 'This TYPO3 configuration label is hardcoded. Create or confirm the XLF unit and replace the label with an LLL reference.';
+        }
+
         return match ($issueType) {
-            TranslationIssueType::KEY_MISMATCH_CANDIDATE => 'A matching source text exists under another key. You can create the selected code key from that match, or change code to use the existing key.',
+            TranslationIssueType::KEY_MISMATCH_CANDIDATE => 'A matching source text exists under another key. Prefer changing the selected key to the matching key; code usages of the old key are carried along when they exist. Create an alias unit only if both keys must remain.',
             TranslationIssueType::KEYLESS_UNIT => 'This XLF unit has source or target text but no usable trans-unit id.',
-            TranslationIssueType::MISSING_SOURCE_FROM_LOCALE_CANDIDATE => 'The key is used, but the source file has no source unit. A locale file contains text for the same key, so it can be used as a candidate source after review.',
-            TranslationIssueType::MISSING_SOURCE_UNIT => 'The key is used in code or templates, but no reliable source unit exists yet.',
-            TranslationIssueType::LOCALE_GAP => 'A target locale file is missing for this source XLF file.',
+            TranslationIssueType::MISSING_SOURCE_FROM_LOCALE_CANDIDATE => 'The source unit is missing. Text from another locale is shown only as a candidate and is not treated as a reliable source until you copy or enter it.',
+            TranslationIssueType::MISSING_SOURCE_UNIT => 'The key is used in code or templates, but the source is missing or not reliable.',
+            TranslationIssueType::MISSING_TRANSLATION_UNIT => 'The key is used in code, but no XLF unit exists anywhere. Enter source and target text manually to create the complete unit.',
+            TranslationIssueType::LOCALE_GAP => 'This existing locale file is missing a key that exists in the source file. Copy the id and source only; the target stays empty for the Missing target workflow.',
             TranslationIssueType::MISSING_TARGET => 'The source exists, but this target locale has no target value.',
-            TranslationIssueType::TODO_VALUE => 'The target currently contains a TODO placeholder.',
+            TranslationIssueType::TODO_SOURCE => 'The source contains a TODO placeholder. Fix the source text first; target actions stay blocked until the source is real.',
+            TranslationIssueType::TODO_VALUE => 'The target currently contains a TODO placeholder while the source is usable.',
             TranslationIssueType::EQUAL_VALUE => 'Source and target are equal. Review whether that is intentional.',
-            TranslationIssueType::UNUSED_CANDIDATE => 'No scanned usage was found. The key may still be used dynamically.',
-            TranslationIssueType::CANNOT_CHANGE => $finding->cannotChangeReason !== '' ? $finding->cannotChangeReason : 'This finding cannot be changed in the current scope.',
+            TranslationIssueType::UNUSED_CANDIDATE => 'No scanned static usage was found. Delete removes the complete XLF unit for this key across matching source and locale files.',
             default => '',
         };
     }
@@ -278,7 +310,7 @@ final class IssueActionPlanner
 
                 $source = trim((string)($candidate['source'] ?? $candidate['text'] ?? ''));
                 $file = trim((string)($candidate['file'] ?? $candidate['languageFile'] ?? ''));
-                $dedupeKey = $key . '|' . $source . '|' . $file;
+                $dedupeKey = $key;
                 if (isset($suggestions[$dedupeKey])) {
                     continue;
                 }

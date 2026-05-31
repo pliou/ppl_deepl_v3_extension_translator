@@ -18,7 +18,6 @@ final class SolutionStrategy
         public readonly bool $requiresTargetKey = false,
         public readonly bool $requiresDeepl = false,
         public readonly bool $destructive = false,
-        public readonly string $confirmationLabel = '',
         public readonly string $description = ''
     ) {}
 
@@ -36,7 +35,6 @@ final class SolutionStrategy
             'requiresTargetKey' => $this->requiresTargetKey,
             'requiresDeepl' => $this->requiresDeepl,
             'destructive' => $this->destructive,
-            'confirmationLabel' => $this->confirmationLabel,
             'description' => $this->description,
             'active' => $active,
             'disabled' => $disabled,

@@ -7,13 +7,17 @@ namespace Ppl\PplDeeplV3ExtensionTranslator\Service;
 use Ppl\PplDeeplV3ExtensionTranslator\Domain\Dto\TranslationAuditReport;
 use Ppl\PplDeeplV3ExtensionTranslator\Domain\Dto\TranslationFinding;
 use Ppl\PplDeeplV3ExtensionTranslator\Domain\Dto\WritePreview;
+use Ppl\PplDeeplV3ExtensionTranslator\Domain\Issue\SourceStatus;
 use Ppl\PplDeeplV3ExtensionTranslator\Domain\Issue\TranslationIssueType;
 use Ppl\PplDeeplV3Requests\Service\DeeplConfigurationService;
 
 final class ExtensionTranslatorWorkflowService
 {
+    private const PERMANENT_IGNORE_TAB = 'permanent_ignores';
+
     public function __construct(
         private readonly ExtensionPathResolver $pathResolver,
+        private readonly ExtensionMetadataResolver $extensionMetadataResolver,
         private readonly TranslationAuditService $auditService,
         private readonly TranslationRequestBuilder $requestBuilder,
         private readonly TranslationProviderInterface $translationProvider,
@@ -35,6 +39,7 @@ final class ExtensionTranslatorWorkflowService
         $activeTab = (string)($body['active_tab'] ?? 'overview');
         $activeSolution = (string)($body['active_solution_strategy'] ?? '');
         $selectedIds = $this->normalizeStringList($body['selected_findings'] ?? []);
+        $selectedIgnoreRuleIds = $this->normalizeStringList($body['selected_ignore_rules'] ?? []);
         $ignoredIds = $this->normalizeStringList($body['ignored_findings'] ?? []);
         $selectedLanguageFiles = $this->normalizeStringList($body['selected_language_files'] ?? []);
         $translatedValues = $this->suggestionWorkspaceService->getSuggestionsForSelection($scanPath, $selectedLanguageFiles);
@@ -87,6 +92,17 @@ final class ExtensionTranslatorWorkflowService
                     $messages[] = $this->message('success', 'Scan complete.');
                 } elseif ($action === 'refresh_selection') {
                     // State-only refresh after selecting rows, files, issue tabs or solution tabs.
+                } elseif ($action === 'delete_ignore_rules') {
+                    if ($selectedIgnoreRuleIds === []) {
+                        $messages[] = $this->message('warning', 'Select at least one blacklist entry.');
+                    } else {
+                        $deletedRules = $this->ignoreRuleService->deleteRulesByIds($selectedIgnoreRuleIds);
+                        $selectedIgnoreRuleIds = [];
+                        $messages[] = $deletedRules > 0
+                            ? $this->message('success', sprintf('Deleted %d blacklist entr%s.', $deletedRules, $deletedRules === 1 ? 'y' : 'ies'))
+                            : $this->message('warning', 'No matching blacklist entry was found.');
+                        $report = $this->auditService->audit($scanPath, $selectedLanguageFiles);
+                    }
                 } elseif ($action === 'discard_suggestions') {
                     $this->suggestionWorkspaceService->discardSuggestions($scanPath, $selectedLanguageFiles);
                     $translatedValues = [];
@@ -98,26 +114,18 @@ final class ExtensionTranslatorWorkflowService
                     $messages[] = $this->message('success', 'Selected row(s) hidden for this run.');
                     $this->suggestionWorkspaceService->discardSuggestions($scanPath, $selectedLanguageFiles);
                     $translatedValues = [];
-                } elseif (in_array($action, ['add_to_edit_list', 'add_to_cleanup_list'], true)) {
-                    if ($selectedFindings === []) {
-                        $messages[] = $this->message('warning', 'Select at least one row.');
-                    } else {
-                        $ignoredIds = array_values(array_unique(array_merge($ignoredIds, $selectedIds)));
-                        $selectedIds = [];
-                        $messages[] = $this->message('success', $action === 'add_to_edit_list' ? 'Added to edit list for this run.' : 'Added to cleanup list for this run.');
-                    }
-                } elseif (in_array($action, ['mark_dynamic_keep', 'always_ignore_key', 'mark_intentionally_reused', 'mark_todo_reviewed', 'mark_locale_source_candidate_reviewed'], true)) {
+                } elseif (in_array($action, ['ignore_finding_permanently', 'mark_dynamic_keep', 'mark_intentionally_reused', 'mark_todo_reviewed', 'mark_locale_source_candidate_reviewed'], true)) {
                     if ($selectedFindings === []) {
                         $messages[] = $this->message('warning', 'Select at least one row.');
                     } else {
                         foreach ($selectedFindings as $finding) {
-                            $this->ignoreRuleService->addRule($finding, $action);
+                            $this->ignoreRuleService->addRule($finding, $this->permanentIgnoreAction($action));
                         }
                         $selectedIds = [];
                         $messages[] = $this->message('success', 'Permanent review rule saved.');
                         $report = $this->auditService->audit($scanPath, $selectedLanguageFiles);
                     }
-                } elseif (in_array($action, ['show_scanned_usage', 'show_key_mismatch_use_existing', 'show_key_mismatch_use_selected', 'show_cannot_change_reason', 'export_findings'], true)) {
+                } elseif (in_array($action, ['show_scanned_usage', 'show_key_mismatch_use_existing', 'show_key_mismatch_use_selected', 'export_findings'], true)) {
                     $reviewFindings = $selectedFindings !== [] ? $selectedFindings : $this->filteredFindings($report, $activeTab, $ignoredIds);
                     $messages[] = $this->message('info', $this->reviewOnlyMessage($action, $reviewFindings));
                 } elseif ($action === 'create_deepl_target_suggestion') {
@@ -131,51 +139,22 @@ final class ExtensionTranslatorWorkflowService
                         foreach ($translationErrors as $translationError) {
                             $messages[] = $this->message('error', $translationError);
                         }
-                        $this->suggestionWorkspaceService->storeSuggestion($scanPath, $selectedLanguageFiles, $action, $translatedValues);
                         $preview = $this->writeService->buildPreview($selectedFindings, $action, ['translated_values' => $translatedValues]);
-                    }
-                } elseif ($action === 'write_selected') {
-                    $resolutionAction = $resolutionAction !== '' ? $resolutionAction : (string)($body['last_resolution_action'] ?? '');
-                    if ($resolutionAction === '') {
-                        $messages[] = $this->message('warning', 'Create a suggestion before writing.');
-                    } else {
-                        $preview = $this->writeService->buildPreview($selectedFindings, $resolutionAction, $this->writeValuesFromBody($body, $translatedValues));
-                        $confirmed = !empty($body['confirm_write']);
-                        $productionConfirmed = !empty($body['confirm_production_write']);
+                        $execution = $this->executePreviewWrite($preview);
+                        $messages = array_merge($messages, $execution['messages']);
+                        $writeResult = $execution['writeResult'];
+                        $preview = null;
 
-                        if (!$confirmed) {
-                            $messages[] = $this->message('warning', 'Review confirmation is required before writing.');
-                        } elseif ($this->environmentGuard->isProduction() && !$productionConfirmed) {
-                            $messages[] = $this->message('warning', 'Production write confirmation is required.');
-                        } elseif (!$preview->hasOperations()) {
-                            $messages[] = $this->message('warning', 'No writable operations were selected.');
-                            $preview = null;
+                        if ($execution['success']) {
+                            $report = $this->auditService->audit($scanPath, $selectedLanguageFiles);
                             $selectedIds = [];
                             $translatedValues = [];
                             $resolutionAction = '';
+                            $this->suggestionWorkspaceService->clearAfterWrite($scanPath, $selectedLanguageFiles);
                             $redirectAfterWrite = true;
-                            $redirectNotice = 'no_operations';
-                        } else {
-                            $writeResult = $this->writeService->write($preview);
-                            $messages[] = $this->message(
-                                $writeResult['errors'] === [] ? 'success' : 'warning',
-                                sprintf('Write complete: %d operation(s), %d file(s).', $writeResult['writtenRows'], $writeResult['affectedFiles'])
-                            );
-                            foreach ($writeResult['errors'] as $error) {
-                                $messages[] = $this->message('error', $error);
-                            }
-                            $report = $this->auditService->audit($scanPath, $selectedLanguageFiles);
-                            if ($writeResult['errors'] === []) {
-                                $preview = null;
-                                $selectedIds = [];
-                                $translatedValues = [];
-                                $resolutionAction = '';
-                                $this->suggestionWorkspaceService->clearAfterWrite($scanPath, $selectedLanguageFiles);
-                                $redirectAfterWrite = true;
-                                $redirectNotice = 'write_complete';
-                                $redirectWrittenRows = (int)$writeResult['writtenRows'];
-                                $redirectAffectedFiles = (int)$writeResult['affectedFiles'];
-                            }
+                            $redirectNotice = 'write_complete';
+                            $redirectWrittenRows = (int)($writeResult['writtenRows'] ?? 0);
+                            $redirectAffectedFiles = (int)($writeResult['affectedFiles'] ?? 0);
                         }
                     }
                 } elseif ($this->isWritePreviewAction($action)) {
@@ -184,10 +163,24 @@ final class ExtensionTranslatorWorkflowService
                         foreach ($selectionErrors as $selectionError) {
                             $messages[] = $this->message('warning', $selectionError);
                         }
-                    } elseif ($this->actionNeedsDeleteConfirmation($action) && empty($body['confirm_delete'])) {
-                        $messages[] = $this->message('warning', 'Delete actions require explicit backup/delete confirmation.');
                     } else {
                         $preview = $this->writeService->buildPreview($selectedFindings, $action, $this->writeValuesFromBody($body, $translatedValues));
+                        $execution = $this->executePreviewWrite($preview);
+                        $messages = array_merge($messages, $execution['messages']);
+                        $writeResult = $execution['writeResult'];
+                        $preview = null;
+
+                        if ($execution['success']) {
+                            $report = $this->auditService->audit($scanPath, $selectedLanguageFiles);
+                            $selectedIds = [];
+                            $translatedValues = [];
+                            $resolutionAction = '';
+                            $this->suggestionWorkspaceService->clearAfterWrite($scanPath, $selectedLanguageFiles);
+                            $redirectAfterWrite = true;
+                            $redirectNotice = 'write_complete';
+                            $redirectWrittenRows = (int)($writeResult['writtenRows'] ?? 0);
+                            $redirectAffectedFiles = (int)($writeResult['affectedFiles'] ?? 0);
+                        }
                     }
                 }
             } catch (\Throwable $exception) {
@@ -202,24 +195,16 @@ final class ExtensionTranslatorWorkflowService
         $reportArray = $report instanceof TranslationAuditReport ? $this->reportForView($report, $activeTab, $selectedIds, $ignoredIds, $translatedValues) : null;
         $visibleFindingsForPanel = $report instanceof TranslationAuditReport ? $this->filteredFindings($report, $activeTab, $ignoredIds) : [];
         $selectedFindingsForPanel = $report instanceof TranslationAuditReport ? $report->findByIds($selectedIds) : [];
+        $formData = $this->formData($body, $scanPath, $sourceLanguage, $targetLanguage, $selectedFindingsForPanel);
+        $ignoreRules = $this->ignoreRulesForView();
+        $blacklistActive = $activeTab === self::PERMANENT_IGNORE_TAB;
 
         return [
             'activeTab' => $activeTab,
             'activeSolution' => $activeSolution,
             'authKeyConfigured' => $this->configurationService->getAuthKey() !== '',
             'capabilities' => $this->translationProvider->getCapabilities()->toArray(),
-            'formData' => [
-                'scanPath' => $scanPath,
-                'sourceLanguage' => $sourceLanguage,
-                'targetLanguage' => $targetLanguage,
-                'glossaryId' => (string)($body['glossary_id'] ?? ''),
-                'styleRuleId' => (string)($body['style_rule_id'] ?? ''),
-                'tagHandling' => (string)($body['tag_handling'] ?? ''),
-                'customInstructions' => (string)($body['custom_instructions'] ?? ''),
-                'manualSourceText' => (string)($body['manual_source_text'] ?? ''),
-                'manualTargetText' => (string)($body['manual_target_text'] ?? ''),
-                'targetKey' => (string)($body['target_key'] ?? ''),
-            ],
+            'formData' => $formData,
             'messages' => $messages,
             'preview' => $preview instanceof WritePreview ? $preview->toArray() : null,
             'report' => $reportArray,
@@ -228,11 +213,19 @@ final class ExtensionTranslatorWorkflowService
             'selectedIds' => $selectedIds,
             'ignoredIds' => $ignoredIds,
             'selectedLanguageFiles' => $selectedLanguageFiles,
-            'actionPanel' => $this->issueActionPlanner->plan($activeTab, $activeSolution, $visibleFindingsForPanel, $selectedFindingsForPanel, $translatedValues),
+            'selectedIgnoreRuleIds' => $selectedIgnoreRuleIds,
+            'blacklist' => [
+                'active' => $blacklistActive,
+                'rules' => $ignoreRules,
+                'count' => count($ignoreRules),
+            ],
+            'actionPanel' => $blacklistActive
+                ? $this->blacklistActionPanel($ignoreRules)
+                : $this->issueActionPlanner->plan($activeTab, $activeSolution, $visibleFindingsForPanel, $selectedFindingsForPanel, $translatedValues),
             'translationOptions' => $this->translationOptionProvider->buildOptions($sourceLanguage, $targetLanguage),
             'translatedValues' => $translatedValues,
             'writeResult' => $writeResult,
-            'issueTabs' => $this->issueTabs(),
+            'issueTabs' => $this->issueTabs($reportArray['summary']['issueCounts'] ?? [], count($ignoreRules)),
             'redirectAfterWrite' => $redirectAfterWrite,
             'redirectNotice' => $redirectNotice,
             'redirectWrittenRows' => $redirectWrittenRows,
@@ -296,17 +289,23 @@ final class ExtensionTranslatorWorkflowService
             $report->findings,
             static fn(TranslationFinding $finding): bool => !isset($ignoredLookup[$finding->findingId])
         ));
+        $reportArray['metricCards'] = $this->metricCards($reportArray['summary']);
         $reportArray['languageFiles'] = array_map(
-            function (array $file) use ($selectedFileLookup, $findings): array {
+            function (array $file) use ($selectedFileLookup, $findings, $report): array {
+                $extensionMetadata = $this->extensionMetadataResolver->forLanguageFile(
+                    $report->scope->absolutePath,
+                    (string)$file['relativePath'],
+                    $report->scope->extensionKey
+                );
                 $file['selected'] = $selectedFileLookup === [] || isset($selectedFileLookup[$file['relativePath']]);
-                $file['extensionKey'] = $this->extensionKeyFromRelativePath((string)$file['relativePath']);
+                $file['extensionKey'] = $extensionMetadata['extensionKey'];
                 $file['shortRelativePath'] = $this->shortLanguageFilePath((string)$file['relativePath']);
-                $file['localeLabel'] = (bool)($file['canonical'] ?? false)
-                    ? 'source: ' . ((string)($file['sourceLanguage'] ?? '') !== '' ? (string)$file['sourceLanguage'] : 'en')
-                    : ((string)($file['locale'] ?? '') !== '' ? (string)$file['locale'] : 'locale unknown');
+                $file['displayName'] = $extensionMetadata['displayName'];
+                $file['localeLabel'] = $this->languageFileLocaleLabel($file);
                 $file['statusSummary'] = $this->languageFileStatusSummary((string)$file['relativePath'], $findings);
                 $file['searchText'] = mb_strtolower(implode(' ', [
                     $file['extensionKey'],
+                    $file['displayName'],
                     $file['relativePath'],
                     $file['localeLabel'],
                     $file['statusSummary'],
@@ -317,7 +316,9 @@ final class ExtensionTranslatorWorkflowService
             $reportArray['languageFiles']
         );
 
-        if (in_array($activeTab, TranslationIssueType::all(), true)) {
+        if ($activeTab === self::PERMANENT_IGNORE_TAB) {
+            $findings = [];
+        } elseif (in_array($activeTab, TranslationIssueType::all(), true)) {
             $findings = array_values(array_filter(
                 $findings,
                 static fn(TranslationFinding $finding): bool => $finding->issueType === $activeTab
@@ -325,11 +326,24 @@ final class ExtensionTranslatorWorkflowService
         }
 
         $reportArray['filteredFindings'] = array_map(
-            static function (TranslationFinding $finding) use ($selectedLookup, $translatedLookup): array {
+            function (TranslationFinding $finding) use ($selectedLookup, $translatedLookup, $report): array {
+                $extensionMetadata = $this->extensionMetadataResolver->forLanguageFile(
+                    $report->scope->absolutePath,
+                    $finding->languageFile,
+                    $report->scope->extensionKey
+                );
                 $row = $finding->toArray();
+                $row['extensionKey'] = $extensionMetadata['extensionKey'];
+                $row['extensionName'] = $extensionMetadata['displayName'];
+                $row['shortLanguageFile'] = $this->shortLanguageFilePath($finding->languageFile);
                 $row['selected'] = isset($selectedLookup[$finding->findingId]);
+                $row['issueLabelKey'] = $this->issueLabelKey($finding->issueType);
+                $row['filterState'] = $this->rowFilterState($finding);
+                $row['needsSource'] = $finding->sourceStatus === SourceStatus::MANUAL_SOURCE_REQUIRED || trim($finding->sourceValue) === '';
                 $row['searchText'] = mb_strtolower(implode(' ', [
                     $row['issueLabel'],
+                    $row['extensionKey'],
+                    $row['extensionName'],
                     $row['languageFile'],
                     $row['displayLocale'],
                     $row['displayKey'],
@@ -366,7 +380,7 @@ final class ExtensionTranslatorWorkflowService
             $canChange = $canChange || $finding->canChange;
         }
 
-        $parts = [$canChange ? 'Can be changed' : 'Review only'];
+        $parts = ['File issue summary'];
         foreach ($counts as $issueType => $count) {
             $parts[] = $count . ' ' . TranslationIssueType::label((string)$issueType);
         }
@@ -374,19 +388,39 @@ final class ExtensionTranslatorWorkflowService
         return implode(' · ', $parts);
     }
 
-    private function extensionKeyFromRelativePath(string $relativePath): string
-    {
-        $parts = explode('/', trim($relativePath, '/'));
-
-        return $parts[0] ?? '';
-    }
-
     private function shortLanguageFilePath(string $relativePath): string
     {
-        $parts = explode('/', trim($relativePath, '/'));
-        array_shift($parts);
+        $relativePath = trim(str_replace('\\', '/', $relativePath), '/');
+        if (str_starts_with($relativePath, 'Resources/Private/Language/')) {
+            return $relativePath;
+        }
 
-        return implode('/', $parts);
+        $languageRootPosition = strpos($relativePath, '/Resources/Private/Language/');
+        if ($languageRootPosition === false) {
+            return $relativePath;
+        }
+
+        return substr($relativePath, $languageRootPosition + 1);
+    }
+
+    /**
+     * @param array<string, mixed> $file
+     */
+    private function languageFileLocaleLabel(array $file): string
+    {
+        $language = '';
+        if ((bool)($file['canonical'] ?? false)) {
+            $language = (string)($file['sourceLanguage'] ?? '');
+        } else {
+            $language = (string)($file['locale'] ?? '');
+            if (trim($language) === '') {
+                $language = (string)($file['targetLanguage'] ?? '');
+            }
+        }
+
+        $language = trim($language) !== '' ? trim($language) : '?';
+
+        return strtoupper($language);
     }
 
     /**
@@ -395,6 +429,10 @@ final class ExtensionTranslatorWorkflowService
      */
     private function selectedIdsForActiveTab(TranslationAuditReport $report, array $selectedIds, string $activeTab): array
     {
+        if ($activeTab === self::PERMANENT_IGNORE_TAB) {
+            return [];
+        }
+
         if (!in_array($activeTab, TranslationIssueType::all(), true)) {
             return $selectedIds;
         }
@@ -446,6 +484,10 @@ final class ExtensionTranslatorWorkflowService
      */
     private function filteredFindings(TranslationAuditReport $report, string $activeTab, array $ignoredIds): array
     {
+        if ($activeTab === self::PERMANENT_IGNORE_TAB) {
+            return [];
+        }
+
         $ignoredLookup = array_fill_keys($ignoredIds, true);
         $findings = array_values(array_filter(
             $report->findings,
@@ -467,30 +509,59 @@ final class ExtensionTranslatorWorkflowService
         return in_array($action, [
             'enter_source_text',
             'enter_source_manually',
-            'use_key_as_temporary_source',
-            'write_todo_source',
-            'create_todo_source',
+            'change_key_to_matching_key',
+            'replace_code_key_with_existing_key',
             'create_alias_source_unit',
             'use_other_locale_as_source',
-            'link_to_candidate',
+            'copy_source_unit_without_target',
+            'create_manual_translation_unit',
             'enter_key_manually',
             'link_keyless_unit_to_key',
-            'delete_invalid_unit_with_backup',
+            'delete_invalid_unit',
             'copy_source_value',
             'write_todo_target',
             'prefix_with_todo',
             'enter_target_text',
             'create_empty_target_unit',
+            'delete_translation_unit',
             'delete_target_locale_only',
             'delete_source_and_targets',
-            'create_target_xlf_file',
-            'create_missing_units_as_todo',
         ], true);
     }
 
-    private function actionNeedsDeleteConfirmation(string $action): bool
+    /**
+     * @return array{messages: array<int, array{type: string, text: string}>, writeResult: ?array{errors: string[], writtenRows: int, affectedFiles: int}, success: bool}
+     */
+    private function executePreviewWrite(WritePreview $preview): array
     {
-        return in_array($action, ['delete_invalid_unit_with_backup', 'delete_target_locale_only', 'delete_source_and_targets'], true);
+        $messages = [];
+        if (!$preview->hasOperations()) {
+            $errors = $preview->errors !== [] ? $preview->errors : ['No writable operations were selected.'];
+            foreach ($errors as $error) {
+                $messages[] = $this->message('warning', $error);
+            }
+
+            return [
+                'messages' => $messages,
+                'writeResult' => null,
+                'success' => false,
+            ];
+        }
+
+        $writeResult = $this->writeService->write($preview);
+        $messages[] = $this->message(
+            $writeResult['errors'] === [] ? 'success' : 'warning',
+            sprintf('Write complete: %d operation(s), %d file(s).', $writeResult['writtenRows'], $writeResult['affectedFiles'])
+        );
+        foreach ($writeResult['errors'] as $error) {
+            $messages[] = $this->message('error', $error);
+        }
+
+        return [
+            'messages' => $messages,
+            'writeResult' => $writeResult,
+            'success' => $writeResult['errors'] === [],
+        ];
     }
 
     /**
@@ -508,14 +579,111 @@ final class ExtensionTranslatorWorkflowService
     }
 
     /**
+     * @param TranslationFinding[] $selectedFindings
+     * @return array<string, string>
+     */
+    private function formData(array $body, string $scanPath, string $sourceLanguage, string $targetLanguage, array $selectedFindings): array
+    {
+        return [
+            'scanPath' => $scanPath,
+            'sourceLanguage' => $sourceLanguage,
+            'targetLanguage' => $targetLanguage,
+            'glossaryId' => (string)($body['glossary_id'] ?? ''),
+            'styleRuleId' => (string)($body['style_rule_id'] ?? ''),
+            'tagHandling' => (string)($body['tag_handling'] ?? ''),
+            'customInstructions' => (string)($body['custom_instructions'] ?? ''),
+            'manualSourceText' => $this->bodyValueOrDefault($body, 'manual_source_text', $this->manualSourceDefault($selectedFindings)),
+            'manualTargetText' => $this->bodyValueOrDefault($body, 'manual_target_text', $this->manualTargetDefault($selectedFindings)),
+            'targetKey' => $this->bodyValueOrDefault($body, 'target_key', $this->targetKeyDefault($selectedFindings)),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function bodyValueOrDefault(array $body, string $field, string $default): string
+    {
+        return array_key_exists($field, $body) ? (string)$body[$field] : $default;
+    }
+
+    /**
+     * @param TranslationFinding[] $findings
+     */
+    private function manualSourceDefault(array $findings): string
+    {
+        return $this->uniqueDefaultValue($findings, static function (TranslationFinding $finding): string {
+            foreach ([
+                $finding->sourceValue,
+                $finding->suggestedValue,
+                (string)($finding->metadata['defaultValue'] ?? ''),
+            ] as $value) {
+                if (trim($value) !== '') {
+                    return $value;
+                }
+            }
+
+            return '';
+        });
+    }
+
+    /**
+     * @param TranslationFinding[] $findings
+     */
+    private function manualTargetDefault(array $findings): string
+    {
+        return $this->uniqueDefaultValue($findings, static function (TranslationFinding $finding): string {
+            foreach ([
+                $finding->currentTargetValue,
+                $finding->suggestedValue,
+            ] as $value) {
+                if (trim($value) !== '') {
+                    return $value;
+                }
+            }
+
+            return '';
+        });
+    }
+
+    /**
+     * @param TranslationFinding[] $findings
+     */
+    private function targetKeyDefault(array $findings): string
+    {
+        return $this->uniqueDefaultValue($findings, static function (TranslationFinding $finding): string {
+            foreach ($finding->relatedCandidates as $candidate) {
+                $key = (string)($candidate['key'] ?? '');
+                if (trim($key) !== '') {
+                    return $key;
+                }
+            }
+
+            return !str_starts_with($finding->transUnitId, '__keyless_') ? $finding->transUnitId : '';
+        });
+    }
+
+    /**
+     * @param TranslationFinding[] $findings
+     */
+    private function uniqueDefaultValue(array $findings, \Closure $valueForFinding): string
+    {
+        $values = [];
+        foreach ($findings as $finding) {
+            $value = (string)$valueForFinding($finding);
+            if (trim($value) === '') {
+                continue;
+            }
+            $values[trim($value)] = $value;
+        }
+
+        return count($values) === 1 ? (string)reset($values) : '';
+    }
+
+    /**
      * @param TranslationFinding[] $findings
      */
     private function reviewOnlyMessage(string $action, array $findings): string
     {
-        if ($action === 'show_cannot_change_reason') {
-            return $findings[0]->cannotChangeReason ?? 'No reason available.';
-        }
-
         if ($action === 'show_scanned_usage') {
             $parts = [];
             foreach ($findings as $finding) {
@@ -560,8 +728,7 @@ final class ExtensionTranslatorWorkflowService
                 $candidateUsages = array_values(array_filter(array_map('strval', (array)($candidate['usageLocations'] ?? []))));
                 if ($preferExistingKey) {
                     $parts[] = sprintf(
-                        'Prefer existing XLF key "%s": change "%s" usage(s) to "%s"%s.',
-                        $candidateKey,
+                        'Change selected key "%s" to matching key "%s"%s.',
                         $selectedKey,
                         $candidateKey,
                         $selectedUsages !== [] ? ' in ' . implode(', ', $selectedUsages) : ''
@@ -573,7 +740,7 @@ final class ExtensionTranslatorWorkflowService
                 }
 
                 $parts[] = sprintf(
-                    'Prefer selected code key "%s": first create or rename the XLF source unit to "%s", then change "%s" usage(s) to "%s"%s.',
+                    'Keep selected key "%s" as an alias: create or rename the XLF source unit to "%s", then change "%s" usage(s) to "%s"%s.',
                     $selectedKey,
                     $selectedKey,
                     $candidateKey,
@@ -597,23 +764,175 @@ final class ExtensionTranslatorWorkflowService
     }
 
     /**
-     * @return array<int, array{value: string, label: string}>
+     * @return array<int, array<string, mixed>>
      */
-    private function issueTabs(): array
+    private function ignoreRulesForView(): array
     {
-        $tabs = [[
+        return array_map(
+            function (array $rule): array {
+                $issueType = (string)($rule['issueType'] ?? '');
+                $rule['issueLabelKey'] = $this->issueLabelKey($issueType);
+
+                return $rule;
+            },
+            $this->ignoreRuleService->readRulesForView()
+        );
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $ignoreRules
+     * @return array<string, mixed>
+     */
+    private function blacklistActionPanel(array $ignoreRules): array
+    {
+        return [
+            'issueInfo' => [
+                'active' => true,
+                'issueType' => self::PERMANENT_IGNORE_TAB,
+                'issueLabel' => 'Ignore permanently',
+                'issueLabelKey' => 'issue.ignorePermanently',
+                'message' => 'These entries are hidden by the permanent ignore list. Delete blacklisting entries to show them in scans again.',
+                'visibleRows' => count($ignoreRules),
+                'selectedRows' => 0,
+                'canChangeCount' => 0,
+                'needsSourceCount' => 0,
+                'cannotChangeCount' => 0,
+                'currentUsages' => [],
+                'relatedCandidates' => [],
+                'keyMismatchConflict' => false,
+            ],
+            'solutionTabs' => [],
+            'activeSolution' => '',
+            'selectionSummary' => [
+                'selectedRows' => 0,
+                'canChange' => 0,
+                'needsSource' => 0,
+                'cannotChange' => 0,
+            ],
+            'tool' => [
+                'state' => 'blacklist',
+                'title' => 'Permanent ignore list',
+                'message' => 'Select blacklist entries and delete them to restore the default scanner result.',
+                'fields' => [],
+                'validationErrors' => [],
+            ],
+            'suggestionSummary' => [
+                'count' => 0,
+                'hasSuggestions' => false,
+            ],
+            'writeSummary' => [],
+        ];
+    }
+
+    /**
+     * @param array<string, int> $issueCounts
+     * @return array{primary: array<int, array<string, mixed>>, other: array<int, array<string, mixed>>, otherCount: int}
+     */
+    private function issueTabs(array $issueCounts, int $permanentIgnoreCount): array
+    {
+        $primaryTypes = [
+            TranslationIssueType::KEYLESS_UNIT,
+            TranslationIssueType::KEY_MISMATCH_CANDIDATE,
+            TranslationIssueType::MISSING_SOURCE_UNIT,
+            TranslationIssueType::MISSING_TARGET,
+            TranslationIssueType::TODO_SOURCE,
+            TranslationIssueType::TODO_VALUE,
+            TranslationIssueType::UNUSED_CANDIDATE,
+            TranslationIssueType::LOCALE_GAP,
+        ];
+
+        $primary = [[
             'value' => 'overview',
-            'label' => 'Overview',
+            'labelKey' => 'tab.overview',
+            'count' => array_sum(array_map('intval', $issueCounts)),
         ]];
 
-        foreach (TranslationIssueType::all() as $issueType) {
-            $tabs[] = [
-                'value' => $issueType,
-                'label' => TranslationIssueType::label($issueType),
-            ];
+        foreach ($primaryTypes as $issueType) {
+            $primary[] = $this->issueTab($issueType, $issueCounts);
         }
 
-        return $tabs;
+        $other = [];
+        foreach (TranslationIssueType::all() as $issueType) {
+            if (in_array($issueType, $primaryTypes, true)) {
+                continue;
+            }
+            $other[] = $this->issueTab($issueType, $issueCounts);
+        }
+        $other[] = [
+            'value' => self::PERMANENT_IGNORE_TAB,
+            'labelKey' => 'issue.ignorePermanently',
+            'count' => $permanentIgnoreCount,
+        ];
+
+        return [
+            'primary' => $primary,
+            'other' => $other,
+            'otherCount' => array_sum(array_map(static fn(array $tab): int => (int)$tab['count'], $other)),
+        ];
+    }
+
+    /**
+     * @param array<string, int> $issueCounts
+     * @return array<string, mixed>
+     */
+    private function issueTab(string $issueType, array $issueCounts): array
+    {
+        return [
+            'value' => $issueType,
+            'labelKey' => $this->issueLabelKey($issueType),
+            'count' => (int)($issueCounts[$issueType] ?? 0),
+        ];
+    }
+
+    private function issueLabelKey(string $issueType): string
+    {
+        return match ($issueType) {
+            TranslationIssueType::KEYLESS_UNIT => 'issue.keylessUnits',
+            TranslationIssueType::KEY_MISMATCH_CANDIDATE => 'issue.possibleKeyMismatch',
+            TranslationIssueType::MISSING_SOURCE_FROM_LOCALE_CANDIDATE => 'issue.missingSourceLocaleCandidate',
+            TranslationIssueType::MISSING_SOURCE_UNIT => 'issue.missingSource',
+            TranslationIssueType::MISSING_TRANSLATION_UNIT => 'issue.missingTranslationUnit',
+            TranslationIssueType::LOCALE_GAP => 'issue.localeGaps',
+            TranslationIssueType::MISSING_TARGET => 'issue.missingTarget',
+            TranslationIssueType::TODO_SOURCE => 'issue.todoSource',
+            TranslationIssueType::TODO_VALUE => 'issue.todoTarget',
+            TranslationIssueType::EQUAL_VALUE => 'issue.equalValue',
+            TranslationIssueType::UNUSED_CANDIDATE => 'issue.unusedCandidates',
+            default => 'issue.unknown',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     * @return array<int, array<string, mixed>>
+     */
+    private function metricCards(array $summary): array
+    {
+        return [
+            ['value' => (int)($summary['xlfFiles'] ?? 0), 'labelKey' => 'summary.xlfFiles', 'kind' => 'neutral'],
+            ['value' => (int)($summary['codeKeys'] ?? 0), 'labelKey' => 'summary.codeKeys', 'kind' => 'neutral'],
+            ['value' => (int)($summary[TranslationIssueType::KEYLESS_UNIT] ?? 0), 'labelKey' => 'summary.keyless', 'kind' => 'blue'],
+            ['value' => (int)($summary[TranslationIssueType::MISSING_SOURCE_UNIT] ?? 0), 'labelKey' => 'summary.missingSource', 'kind' => 'amber'],
+            ['value' => (int)($summary[TranslationIssueType::MISSING_TARGET] ?? 0), 'labelKey' => 'summary.missingTarget', 'kind' => 'amber'],
+            ['value' => (int)($summary[TranslationIssueType::TODO_SOURCE] ?? 0), 'labelKey' => 'summary.todoSource', 'kind' => 'green'],
+            ['value' => (int)($summary[TranslationIssueType::TODO_VALUE] ?? 0), 'labelKey' => 'summary.todoTarget', 'kind' => 'neutral'],
+            ['value' => (int)($summary[TranslationIssueType::UNUSED_CANDIDATE] ?? 0), 'labelKey' => 'summary.extra', 'kind' => 'neutral'],
+        ];
+    }
+
+    private function rowFilterState(TranslationFinding $finding): string
+    {
+        if (!$finding->canChange) {
+            return 'read_only';
+        }
+        if ($finding->sourceStatus === SourceStatus::MANUAL_SOURCE_REQUIRED || trim($finding->sourceValue) === '') {
+            return 'needs_source';
+        }
+        if ($finding->actionState !== '') {
+            return $finding->actionState;
+        }
+
+        return 'changeable';
     }
 
     /**
@@ -646,5 +965,12 @@ final class ExtensionTranslatorWorkflowService
         }
 
         return $map;
+    }
+
+    private function permanentIgnoreAction(string $action): string
+    {
+        return in_array($action, ['mark_dynamic_keep', 'mark_intentionally_reused', 'mark_todo_reviewed', 'mark_locale_source_candidate_reviewed'], true)
+            ? 'ignore_finding_permanently'
+            : $action;
     }
 }

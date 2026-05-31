@@ -33,6 +33,17 @@ final class SelectionStateService
             return array_values(array_unique($errors));
         }
 
+        if (!$this->allowsReadOnlySelection($strategy)) {
+            foreach ($findings as $finding) {
+                if (!$finding->canChange) {
+                    $errors[] = $finding->cannotChangeReason !== ''
+                        ? $finding->cannotChangeReason
+                        : 'Selected rows are read-only. Use an ignore action if this should stay out of the working list.';
+                    break;
+                }
+            }
+        }
+
         if ($strategy->requiresKnownSource) {
             foreach ($findings as $finding) {
                 if ($strategy->requiresDeepl && (!SourceStatus::canUseForDeepl($finding->sourceStatus) || trim($finding->sourceValue) === '')) {
@@ -47,6 +58,19 @@ final class SelectionStateService
         }
 
         return array_values(array_unique($errors));
+    }
+
+    private function allowsReadOnlySelection(SolutionStrategy $strategy): bool
+    {
+        return in_array($strategy->command, [
+            'ignore_finding_for_run',
+            'ignore_finding_permanently',
+            'keep_todo_in_run',
+            'show_scanned_usage',
+            'show_key_mismatch_use_existing',
+            'show_key_mismatch_use_selected',
+            'export_findings',
+        ], true);
     }
 
     /**
@@ -69,7 +93,7 @@ final class SelectionStateService
             } else {
                 $summary['cannotChange']++;
             }
-            if (trim($finding->sourceValue) === '') {
+            if ($finding->sourceStatus === SourceStatus::MANUAL_SOURCE_REQUIRED || trim($finding->sourceValue) === '') {
                 $summary['needsSource']++;
             }
             if (SourceStatus::canUseForDeepl($finding->sourceStatus) && trim($finding->sourceValue) !== '') {

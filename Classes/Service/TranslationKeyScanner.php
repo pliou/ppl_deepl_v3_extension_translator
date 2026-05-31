@@ -9,7 +9,45 @@ use Ppl\PplDeeplV3ExtensionTranslator\Domain\Dto\ScanScope;
 final class TranslationKeyScanner
 {
     private const CODE_EXTENSIONS = ['php', 'html', 'js', 'ts', 'yaml', 'yml', 'typoscript', 'tsconfig', 'xml'];
-    private const EXCLUDED_DIRECTORIES = ['.git', 'var', 'node_modules', 'Resources/Private/Language'];
+    private const EXCLUDED_DIRECTORIES = ['.git', 'var', 'node_modules', 'Tests', 'Fixtures', 'Resources/Private/Language'];
+    private const EXCLUDED_PATH_PARTS = ['/Tests/', '/Fixtures/', '/Classes/Service/Smoke/', '/Resources/Private/Language/'];
+    private const ROOT_SCAN_FIXTURE_PACKAGES = ['ppl_et_issue_fixture', 'ppl_et_smoke_test'];
+    private const CONVENTIONAL_LOCALLANG_MOD_KEYS = [
+        'mlang_tabs_tab',
+        'mlang_labels_tablabel',
+        'mlang_labels_tabdescr',
+    ];
+    private const TRANSLATION_KEY_PREFIXES = [
+        'action.',
+        'backend.',
+        'button.',
+        'column.',
+        'config.',
+        'constants.',
+        'error.',
+        'extconf.',
+        'field.',
+        'file.',
+        'filter.',
+        'group.',
+        'issue.',
+        'label.',
+        'message.',
+        'mode.',
+        'module.',
+        'option.',
+        'placeholder.',
+        'preview.',
+        'section.',
+        'state.',
+        'status.',
+        'summary.',
+        'tab.',
+        'tabs.',
+        'text.',
+        'wizard.',
+        'workflow.',
+    ];
 
     /**
      * @return array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}>
@@ -29,8 +67,7 @@ final class TranslationKeyScanner
                 continue;
             }
 
-            $extension = strtolower($file->getExtension());
-            if (!in_array($extension, self::CODE_EXTENSIONS, true)) {
+            if (!$this->isScannableCodeFile($file)) {
                 continue;
             }
 
@@ -50,6 +87,36 @@ final class TranslationKeyScanner
         ksort($keys);
 
         return $keys;
+    }
+
+    /**
+     * @return array<int, array{key: string, sourceFile: string, absoluteSourceFile: string, line: int, languageFile: string, defaultValue: string, originalNeedle: string, replacementNeedle: string}>
+     */
+    public function scanHardcodedConfigLabels(ScanScope $scope): array
+    {
+        $labels = [];
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveCallbackFilterIterator(
+                new \RecursiveDirectoryIterator($scope->absolutePath, \FilesystemIterator::SKIP_DOTS),
+                fn(\SplFileInfo $file): bool => $this->shouldIncludeFileInfo($file, $scope->absolutePath)
+            )
+        );
+
+        foreach ($iterator as $file) {
+            if (!$file instanceof \SplFileInfo || !$file->isFile() || !$this->isConfigLabelFile($file)) {
+                continue;
+            }
+
+            $absoluteFile = str_replace('\\', '/', $file->getPathname());
+            $relativeFile = ltrim(substr($absoluteFile, strlen($scope->absolutePath)), '/');
+            $contents = (string)file_get_contents($absoluteFile);
+            $sourceExtensionKey = $this->extensionKeyForFile($absoluteFile, $scope->absolutePath, $scope->extensionKey);
+            foreach ($this->collectHardcodedConfigLabelsFromFile($contents, $relativeFile, $absoluteFile, $sourceExtensionKey) as $label) {
+                $labels[] = $label;
+            }
+        }
+
+        return $labels;
     }
 
     /**
@@ -84,10 +151,39 @@ final class TranslationKeyScanner
             }
         }
 
+        if (preg_match_all('#LLL:EXT:([A-Za-z0-9_-]+)/([^:\s"\']*locallang_mod\.xlf)(?!:)#', $contents, $matches, PREG_SET_ORDER)) {
+            $filterByExtensionKey = !in_array($extensionKey, ['packages', 'extensions', 'local', 'ext'], true);
+
+            foreach ($matches as $match) {
+                $referencedExtensionKey = str_replace('-', '_', $match[1]);
+                if ($filterByExtensionKey && $extensionKey !== '' && $referencedExtensionKey !== $extensionKey) {
+                    continue;
+                }
+
+                $languageFileHint = $this->normalizeLanguageFileHint($match[2]);
+                foreach (self::CONVENTIONAL_LOCALLANG_MOD_KEYS as $key) {
+                    if (!$filterByExtensionKey) {
+                        $packageSegment = $this->firstPathSegment($relativeFile);
+                        if ($packageSegment !== '') {
+                            $this->addKey($keys, $key, $relativeFile, $packageSegment . '/' . $languageFileHint);
+                        }
+
+                        if ($packageSegment !== $match[1]) {
+                            $this->addKey($keys, $key, $relativeFile, $match[1] . '/' . $languageFileHint);
+                        }
+
+                        continue;
+                    }
+
+                    $this->addKey($keys, $key, $relativeFile, $languageFileHint);
+                }
+            }
+        }
+
         if (preg_match_all('#<f:translate\b[^>]*>#i', $contents, $tagMatches)) {
             foreach ($tagMatches[0] as $tag) {
                 $attributes = $this->attributesFromTag($tag);
-                $key = $this->cleanKey((string)($attributes['key'] ?? ''));
+                $key = $this->translationKeyFromAttributes($attributes);
                 if ($key === '' || str_starts_with($key, 'LLL:')) {
                     continue;
                 }
@@ -98,6 +194,9 @@ final class TranslationKeyScanner
         if (preg_match_all('#\{f:translate\((.*?)\)\}#is', $contents, $inlineMatches)) {
             foreach ($inlineMatches[1] as $arguments) {
                 $key = $this->argumentValue($arguments, 'key');
+                if ($key === '') {
+                    $key = $this->argumentValue($arguments, 'id');
+                }
                 if ($key === '' || str_starts_with($key, 'LLL:')) {
                     continue;
                 }
@@ -127,6 +226,48 @@ final class TranslationKeyScanner
                 $this->addKey($keys, $key, $relativeFile, '');
             }
         }
+
+        $this->collectKeyLikeLiterals($contents, $relativeFile, $keys);
+    }
+
+    /**
+     * @return array<int, array{key: string, sourceFile: string, absoluteSourceFile: string, line: int, languageFile: string, defaultValue: string, originalNeedle: string, replacementNeedle: string}>
+     */
+    private function collectHardcodedConfigLabelsFromFile(string $contents, string $relativeFile, string $absoluteFile, string $extensionKey): array
+    {
+        $labels = [];
+        $lines = preg_split('/\R/u', $contents) ?: [];
+        $keyPrefix = $this->configLabelKeyPrefix($relativeFile);
+        $languageFile = $this->configLabelLanguageFileHint($relativeFile);
+        $extensionKey = $extensionKey !== '' ? $extensionKey : $this->firstPathSegment($relativeFile);
+
+        foreach ($lines as $index => $line) {
+            if (preg_match('/(\blabel\s*=\s*)([^\r\n]*)/u', $line, $match) !== 1) {
+                continue;
+            }
+
+            $labelValue = trim((string)$match[2]);
+            if ($labelValue === '' || str_starts_with($labelValue, 'LLL:') || preg_match('/[\p{L}A-Za-z]/u', $labelValue) !== 1) {
+                continue;
+            }
+
+            $settingName = $this->findRelatedSettingName($lines, $index);
+            $key = $this->uniqueConfigLabelKey($labels, $keyPrefix . '.' . ($settingName !== '' ? $settingName : 'label' . ($index + 1)));
+            $lllReference = 'LLL:EXT:' . $extensionKey . '/' . $languageFile . ':' . $key;
+
+            $labels[] = [
+                'key' => $key,
+                'sourceFile' => $relativeFile,
+                'absoluteSourceFile' => $absoluteFile,
+                'line' => $index + 1,
+                'languageFile' => $languageFile,
+                'defaultValue' => $labelValue,
+                'originalNeedle' => (string)$match[1] . (string)$match[2],
+                'replacementNeedle' => (string)$match[1] . $lllReference,
+            ];
+        }
+
+        return $labels;
     }
 
     /**
@@ -134,7 +275,7 @@ final class TranslationKeyScanner
      */
     private function addKey(array &$keys, string $key, string $sourceFile, string $languageFile, string $defaultValue = ''): void
     {
-        if ($key === '') {
+        if ($key === '' || str_ends_with($key, '.') || str_ends_with($key, ':')) {
             return;
         }
 
@@ -162,17 +303,45 @@ final class TranslationKeyScanner
         $path = str_replace('\\', '/', $file->getPathname());
         $relative = trim(substr($path, strlen(str_replace('\\', '/', $scopePath))), '/');
 
+        if ($this->isFixturePackageInRootScan($relative, $scopePath)) {
+            return false;
+        }
+
         foreach (self::EXCLUDED_DIRECTORIES as $excludedDirectory) {
             if ($relative === $excludedDirectory || str_starts_with($relative . '/', $excludedDirectory . '/')) {
                 return false;
             }
         }
 
-        if (str_contains('/' . $relative . '/', '/Resources/Private/Language/')) {
-            return false;
+        $relativeWithSlashes = '/' . $relative . '/';
+        foreach (self::EXCLUDED_PATH_PARTS as $excludedPathPart) {
+            if (str_contains($relativeWithSlashes, $excludedPathPart)) {
+                return false;
+            }
         }
 
         return true;
+    }
+
+    private function isFixturePackageInRootScan(string $relative, string $scopePath): bool
+    {
+        if (!in_array(basename(str_replace('\\', '/', $scopePath)), ['packages', 'extensions', 'local', 'ext'], true)) {
+            return false;
+        }
+
+        return in_array($this->firstPathSegment($relative), self::ROOT_SCAN_FIXTURE_PACKAGES, true);
+    }
+
+    private function isScannableCodeFile(\SplFileInfo $file): bool
+    {
+        return in_array(strtolower($file->getExtension()), self::CODE_EXTENSIONS, true)
+            || $file->getFilename() === 'ext_conf_template.txt';
+    }
+
+    private function isConfigLabelFile(\SplFileInfo $file): bool
+    {
+        return $file->getFilename() === 'ext_conf_template.txt'
+            || in_array(strtolower($file->getExtension()), ['typoscript', 'tsconfig'], true);
     }
 
     private function firstPathSegment(string $relativeFile): string
@@ -180,6 +349,105 @@ final class TranslationKeyScanner
         $parts = explode('/', trim(str_replace('\\', '/', $relativeFile), '/'));
 
         return (string)($parts[0] ?? '');
+    }
+
+    /**
+     * @param string[] $lines
+     */
+    private function findRelatedSettingName(array $lines, int $labelLineIndex): string
+    {
+        for ($offset = 0; $offset <= 6; $offset++) {
+            $line = (string)($lines[$labelLineIndex + $offset] ?? '');
+            if (preg_match('/^\s*#/u', $line) === 1) {
+                continue;
+            }
+            if (preg_match('/^\s*([A-Za-z][A-Za-z0-9_.]*)\s*=/u', $line, $match) === 1) {
+                $parts = explode('.', (string)$match[1]);
+
+                return $this->cleanKey((string)end($parts));
+            }
+        }
+
+        return '';
+    }
+
+    private function configLabelKeyPrefix(string $relativeFile): string
+    {
+        $fileName = basename(str_replace('\\', '/', $relativeFile));
+        if ($fileName === 'ext_conf_template.txt') {
+            return 'extconf';
+        }
+        if (str_ends_with($fileName, '.typoscript')) {
+            return 'constants';
+        }
+        if (str_ends_with($fileName, '.tsconfig')) {
+            return 'tsconfig';
+        }
+
+        return 'label';
+    }
+
+    private function configLabelLanguageFileHint(string $relativeFile): string
+    {
+        $relativeFile = trim(str_replace('\\', '/', $relativeFile), '/');
+        $parts = explode('/', $relativeFile);
+        $first = (string)($parts[0] ?? '');
+        $second = (string)($parts[1] ?? '');
+        $extensionLocalRoots = ['Build', 'Classes', 'Configuration', 'Documentation', 'Resources', 'Tests'];
+
+        if ($first !== '' && $second !== '' && !in_array($first, $extensionLocalRoots, true)) {
+            return $first . '/Resources/Private/Language/locallang.xlf';
+        }
+
+        return 'Resources/Private/Language/locallang.xlf';
+    }
+
+    private function extensionKeyForFile(string $absoluteFile, string $scopePath, string $fallbackExtensionKey): string
+    {
+        $scopePath = rtrim(str_replace('\\', '/', $scopePath), '/');
+        $directory = dirname(str_replace('\\', '/', $absoluteFile));
+
+        while ($directory !== '' && str_starts_with($directory . '/', $scopePath . '/')) {
+            $composerPath = $directory . '/composer.json';
+            if (is_file($composerPath)) {
+                $decoded = json_decode((string)file_get_contents($composerPath), true);
+                if (is_array($decoded)) {
+                    $extensionKey = (string)($decoded['extra']['typo3/cms']['extension-key'] ?? '');
+                    if ($extensionKey !== '') {
+                        return str_replace('-', '_', $extensionKey);
+                    }
+                }
+            }
+
+            $parent = dirname($directory);
+            if ($parent === $directory) {
+                break;
+            }
+            $directory = $parent;
+        }
+
+        return str_replace('-', '_', $fallbackExtensionKey);
+    }
+
+    /**
+     * @param array<int, array{key: string}> $labels
+     */
+    private function uniqueConfigLabelKey(array $labels, string $key): string
+    {
+        $existing = [];
+        foreach ($labels as $label) {
+            $existing[(string)$label['key']] = true;
+        }
+        if (!isset($existing[$key])) {
+            return $key;
+        }
+
+        $suffix = 2;
+        while (isset($existing[$key . '.' . $suffix])) {
+            $suffix++;
+        }
+
+        return $key . '.' . $suffix;
     }
 
     private function normalizeLanguageFileHint(string $hint): string
@@ -202,6 +470,41 @@ final class TranslationKeyScanner
     }
 
     /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectKeyLikeLiterals(string $contents, string $relativeFile, array &$keys): void
+    {
+        $matchCount = preg_match_all('#(["\'])([A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z0-9_:-]+)+)\1#', $contents, $matches, PREG_SET_ORDER);
+        if ($matchCount === false || $matchCount === 0) {
+            return;
+        }
+
+        foreach ($matches as $match) {
+            $key = $this->cleanKey((string)$match[2]);
+            if (!$this->looksLikeTranslationKey($key)) {
+                continue;
+            }
+
+            $this->addKey($keys, $key, $relativeFile, '');
+        }
+    }
+
+    private function looksLikeTranslationKey(string $key): bool
+    {
+        if ($key === '' || str_starts_with($key, 'LLL:') || str_contains($key, '{') || str_contains($key, '}')) {
+            return false;
+        }
+
+        foreach (self::TRANSLATION_KEY_PREFIXES as $prefix) {
+            if (str_starts_with($key, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * @return array<string, string>
      */
     private function attributesFromTag(string $tag): array
@@ -214,6 +517,19 @@ final class TranslationKeyScanner
         }
 
         return $attributes;
+    }
+
+    /**
+     * @param array<string, string> $attributes
+     */
+    private function translationKeyFromAttributes(array $attributes): string
+    {
+        $key = $this->cleanKey((string)($attributes['key'] ?? ''));
+        if ($key !== '') {
+            return $key;
+        }
+
+        return $this->cleanKey((string)($attributes['id'] ?? ''));
     }
 
     private function argumentValue(string $arguments, string $name): string

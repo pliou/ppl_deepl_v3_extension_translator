@@ -1,0 +1,462 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xliff version="1.0">
+    <file source-language="en" datatype="plaintext" original="messages" date="2026-05-25T00:00:00Z" product-name="ppl_deepl_v3_extension_translator" target-language="nl">
+        <header />
+        <body>
+            <trans-unit id="module.root.title">
+                <source>PPL DeepL V3</source>
+                <target>PPL DeepL V3</target>
+            </trans-unit>
+            <trans-unit id="module.root.description">
+                <source>PPL DeepL V3 tools.</source>
+                <target>PPL DeepL V3 gereedschappen.</target>
+            </trans-unit>
+            <trans-unit id="module.extensionTranslator.title">
+                <source>Extension Translator</source>
+                <target>Extensie Vertaler</target>
+            </trans-unit>
+            <trans-unit id="module.extensionTranslator.description">
+                <source>Audit and update TYPO3 extension XLF files.</source>
+                <target>Controleer en update TYPO3 extensie XLF bestanden.</target>
+            </trans-unit>
+            <trans-unit id="label.selectedRows">
+                <source>Selected rows</source>
+                <target>Geselecteerde rijen</target>
+            </trans-unit>
+            <trans-unit id="status.deeplConfigured">
+                <source>DeepL configured</source>
+                <target>DeepL geconfigureerd</target>
+            </trans-unit>
+            <trans-unit id="status.deeplMissing">
+                <source>DeepL missing</source>
+                <target>DeepL ontbreekt</target>
+            </trans-unit>
+            
+            
+            
+            
+            
+            
+            
+            
+            
+            <trans-unit id="section.issueTypeTabs">
+                <source>Issue type tabs</source>
+                <target>Tabbladen met probleemtypes</target>
+            </trans-unit>
+            <trans-unit id="section.solutionStrategies">
+                <source>Solution strategies</source>
+                <target>Oplossingsstrategieën</target>
+            </trans-unit>
+            
+            <trans-unit id="message.keyMismatchConflict">
+                <source>Both the selected key and at least one matching XLF key are used. Create an alias unit only if both keys should remain; otherwise change the selected key to the matching key.</source>
+                <target>Zowel de geselecteerde sleutel als minstens één overeenkomende XLF sleutel worden gebruikt. Maak alleen een aliaseenheid aan als beide sleutels moeten blijven bestaan; verander anders de geselecteerde sleutel in de overeenkomende sleutel.</target>
+            </trans-unit>
+            <trans-unit id="message.invalidFormToken">
+                <source>The form token is invalid. Please reload the module and try again.</source>
+                <target>Het formuliertoken is ongeldig. Laad de module opnieuw en probeer het opnieuw.</target>
+            </trans-unit>
+            <trans-unit id="message.getActionRequiresPost">
+                <source>Action ignored. Write actions require a protected POST request.</source>
+                <target>Actie genegeerd. Voor schrijfacties is een beveiligd POST-verzoek vereist.</target>
+            </trans-unit>
+            <trans-unit id="field.scanPath">
+                <source>Path</source>
+                <target>Pad</target>
+            </trans-unit>
+            <trans-unit id="field.scanScopePreset">
+                <source>Known paths</source>
+                <target>Bekende paden</target>
+            </trans-unit>
+            
+            <trans-unit id="field.sourceLanguage">
+                <source>Source language</source>
+                <target>Brontaal</target>
+            </trans-unit>
+            <trans-unit id="field.targetOverride">
+                <source>Target override</source>
+                <target>Doel overschrijven</target>
+            </trans-unit>
+            <trans-unit id="field.glossaryId">
+                <source>Glossary ID</source>
+                <target>Woordenlijst ID</target>
+            </trans-unit>
+            <trans-unit id="field.styleRuleId">
+                <source>Style rule ID</source>
+                <target>Stijlregel ID</target>
+            </trans-unit>
+            <trans-unit id="field.tagHandling">
+                <source>Tag handling</source>
+                <target>Afhandeling van tags</target>
+            </trans-unit>
+            <trans-unit id="field.customInstructions">
+                <source>Custom instructions</source>
+                <target>Aangepaste instructies</target>
+            </trans-unit>
+            <trans-unit id="field.manualSourceText">
+                <source>Manual source text</source>
+                <target>Handmatige brontekst</target>
+            </trans-unit>
+            <trans-unit id="field.manualTargetText">
+                <source>Manual target text</source>
+                <target>Handmatige doeltekst</target>
+            </trans-unit>
+            <trans-unit id="field.targetKey">
+                <source>Target key</source>
+                <target>Doelsleutel</target>
+            </trans-unit>
+            <trans-unit id="option.autoFromXlfLocale">
+                <source>Auto from XLF locale</source>
+                <target>Automatisch vanuit XLF landinstelling</target>
+            </trans-unit>
+            <trans-unit id="option.noGlossary">
+                <source>No glossary</source>
+                <target>Geen woordenlijst</target>
+            </trans-unit>
+            <trans-unit id="option.noStyleRule">
+                <source>No style rule</source>
+                <target>Geen stijlregel</target>
+            </trans-unit>
+            <trans-unit id="option.plainText">
+                <source>Plain text</source>
+                <target>Platte tekst</target>
+            </trans-unit>
+            <trans-unit id="placeholder.fileSearch">
+                <source>Search extension, file or locale</source>
+                <target>Zoekextensie, bestand of landinstelling</target>
+            </trans-unit>
+            <trans-unit id="placeholder.findingSearch">
+                <source>Search findings</source>
+                <target>Zoekresultaten</target>
+            </trans-unit>
+            
+            
+            
+            <trans-unit id="action.scan">
+                <source>Scan</source>
+                <target>Scannen</target>
+            </trans-unit>
+            <trans-unit id="action.restartScan">
+                <source>Restart scan</source>
+                <target>Start het scannen opnieuw</target>
+            </trans-unit>
+            <trans-unit id="action.selectAll">
+                <source>Select all</source>
+                <target>Selecteer alles</target>
+            </trans-unit>
+            <trans-unit id="action.deselectAll">
+                <source>Deselect all</source>
+                <target>Deselecteer alles</target>
+            </trans-unit>
+            
+            <trans-unit id="action.selectAllVisibleRows">
+                <source>Select all visible rows</source>
+                <target>Selecteer alle zichtbare rijen</target>
+            </trans-unit>
+            <trans-unit id="action.clearSelection">
+                <source>Clear selection</source>
+                <target>Duidelijke selectie</target>
+            </trans-unit>
+            
+            
+            
+            
+            <trans-unit id="tab.overview">
+                <source>Overview</source>
+                <target>Overzicht</target>
+            </trans-unit>
+            
+            
+            
+            
+            
+            
+            <trans-unit id="summary.xlfFiles">
+                <source>XLF files</source>
+                <target>XLF bestanden</target>
+            </trans-unit>
+            <trans-unit id="summary.codeKeys">
+                <source>Code keys</source>
+                <target>Codesleutels</target>
+            </trans-unit>
+            <trans-unit id="summary.keyless">
+                <source>Keyless</source>
+                <target>Sleutelloos</target>
+            </trans-unit>
+            
+            
+            
+            
+            <trans-unit id="summary.todoSource">
+                <source>TODO source</source>
+                <target>TODO bron</target>
+            </trans-unit>
+            <trans-unit id="summary.todoTarget">
+                <source>TODO target</source>
+                <target>TODO doel</target>
+            </trans-unit>
+            
+            <trans-unit id="summary.missingSource">
+                <source>Missing source</source>
+                <target>Ontbrekende bron</target>
+            </trans-unit>
+            <trans-unit id="summary.missingTarget">
+                <source>Missing target</source>
+                <target>Ontbrekend doel</target>
+            </trans-unit>
+            
+            
+            
+            <trans-unit id="summary.extra">
+                <source>Unused candidates</source>
+                <target>Ongebruikte kandidaten</target>
+            </trans-unit>
+            <trans-unit id="column.issue">
+                <source>Issue</source>
+                <target>Probleem</target>
+            </trans-unit>
+            <trans-unit id="column.select">
+                <source>Select</source>
+                <target>Selecteer</target>
+            </trans-unit>
+            <trans-unit id="column.file">
+                <source>File</source>
+                <target>Bestand</target>
+            </trans-unit>
+            <trans-unit id="column.extension">
+                <source>Extension</source>
+                <target>Extensie</target>
+            </trans-unit>
+            <trans-unit id="column.locale">
+                <source>Locale</source>
+                <target>Lokaal</target>
+            </trans-unit>
+            <trans-unit id="column.key">
+                <source>Key</source>
+                <target>Sleutel</target>
+            </trans-unit>
+            <trans-unit id="column.sourceState">
+                <source>Source state</source>
+                <target>Bronstatus</target>
+            </trans-unit>
+            <trans-unit id="column.source">
+                <source>Source</source>
+                <target>Bron</target>
+            </trans-unit>
+            <trans-unit id="column.current">
+                <source>Current target</source>
+                <target>Huidig doel</target>
+            </trans-unit>
+            <trans-unit id="column.relatedCandidates">
+                <source>Related candidates</source>
+                <target>Gerelateerde kandidaten</target>
+            </trans-unit>
+            <trans-unit id="column.sourceHash">
+                <source>Source hash</source>
+                <target>Bron-hash</target>
+            </trans-unit>
+            <trans-unit id="column.savedAt">
+                <source>Saved at</source>
+                <target>Opgeslagen bij</target>
+            </trans-unit>
+            
+            
+            
+            <trans-unit id="label.needsSource">
+                <source>Needs source</source>
+                <target>Bron nodig</target>
+            </trans-unit>
+            <trans-unit id="label.selectedKeyUsage">
+                <source>Selected key usage</source>
+                <target>Geselecteerd sleutelgebruik</target>
+            </trans-unit>
+            
+            <trans-unit id="label.alsoUsedInCode">
+                <source>Also used in code</source>
+                <target>Wordt ook gebruikt in code</target>
+            </trans-unit>
+            <trans-unit id="label.suggestedMatchingKeys">
+                <source>Suggested matching keys</source>
+                <target>Voorgestelde bijpassende sleutels</target>
+            </trans-unit>
+            <trans-unit id="label.blacklistEntries">
+                <source>Blacklist entries</source>
+                <target>Vermeldingen op de zwarte lijst</target>
+            </trans-unit>
+            
+            
+            
+            
+            
+            <trans-unit id="section.projectScan">
+                <source>Project scan</source>
+                <target>Projectscan</target>
+            </trans-unit>
+            <trans-unit id="section.files">
+                <source>Files</source>
+                <target>Bestanden</target>
+            </trans-unit>
+            <trans-unit id="section.issues">
+                <source>Issues</source>
+                <target>Problemen</target>
+            </trans-unit>
+            <trans-unit id="section.metrics">
+                <source>Metrics</source>
+                <target>Statistieken</target>
+            </trans-unit>
+            <trans-unit id="section.problemRows">
+                <source>Problem rows</source>
+                <target>Probleem rijen</target>
+            </trans-unit>
+            <trans-unit id="section.selectedIssue">
+                <source>Selected issue</source>
+                <target>Geselecteerde kwestie</target>
+            </trans-unit>
+            <trans-unit id="section.relatedCandidate">
+                <source>Related candidate</source>
+                <target>Gerelateerde kandidaat</target>
+            </trans-unit>
+            <trans-unit id="section.solution">
+                <source>Solution</source>
+                <target>Oplossing</target>
+            </trans-unit>
+            <trans-unit id="section.permanentIgnores">
+                <source>Permanent ignore list</source>
+                <target>Permanente negeerlijst</target>
+            </trans-unit>
+            <trans-unit id="tab.other">
+                <source>Other</source>
+                <target>Anders</target>
+            </trans-unit>
+            <trans-unit id="issue.keylessUnits">
+                <source>Keyless units</source>
+                <target>Sleutelloze eenheden</target>
+            </trans-unit>
+            <trans-unit id="issue.possibleKeyMismatch">
+                <source>Possible key mismatch</source>
+                <target>Mogelijke sleutelmismatch</target>
+            </trans-unit>
+            <trans-unit id="issue.missingSourceLocaleCandidate">
+                <source>Missing source, locale candidate</source>
+                <target>Ontbrekende bron, kandidaat voor landinstelling</target>
+            </trans-unit>
+            <trans-unit id="issue.missingSource">
+                <source>Missing source</source>
+                <target>Ontbrekende bron</target>
+            </trans-unit>
+            <trans-unit id="issue.missingTranslationUnit">
+                <source>Missing translation unit</source>
+                <target>Ontbrekende vertaaleenheid</target>
+            </trans-unit>
+            <trans-unit id="issue.localeGaps">
+                <source>Locale gaps</source>
+                <target>Lokale hiaten</target>
+            </trans-unit>
+            <trans-unit id="issue.missingTarget">
+                <source>Missing target</source>
+                <target>Ontbrekend doel</target>
+            </trans-unit>
+            <trans-unit id="issue.todoSource">
+                <source>TODO source</source>
+                <target>TODO bron</target>
+            </trans-unit>
+            <trans-unit id="issue.todoTarget">
+                <source>TODO target</source>
+                <target>TODO doel</target>
+            </trans-unit>
+            <trans-unit id="issue.equalValue">
+                <source>Equal value</source>
+                <target>Gelijke waarde</target>
+            </trans-unit>
+            <trans-unit id="issue.unusedCandidates">
+                <source>Unused candidates</source>
+                <target>Ongebruikte kandidaten</target>
+            </trans-unit>
+            <trans-unit id="issue.ignorePermanently">
+                <source>Ignore permanently</source>
+                <target>Negeer permanent</target>
+            </trans-unit>
+            <trans-unit id="issue.reviewFindings">
+                <source>Review findings</source>
+                <target>Beoordeel de bevindingen</target>
+            </trans-unit>
+            <trans-unit id="issue.unknown">
+                <source>Unknown issue</source>
+                <target>Onbekend probleem</target>
+            </trans-unit>
+            <trans-unit id="action.rescan">
+                <source>Rescan</source>
+                <target>Opnieuw scannen</target>
+            </trans-unit>
+            <trans-unit id="action.selectedOnly">
+                <source>Selected only</source>
+                <target>Alleen geselecteerd</target>
+            </trans-unit>
+            <trans-unit id="action.selectVisible">
+                <source>Select visible</source>
+                <target>Selecteer zichtbaar</target>
+            </trans-unit>
+            <trans-unit id="action.previousPage">
+                <source>Previous page</source>
+                <target>Vorige pagina</target>
+            </trans-unit>
+            <trans-unit id="action.nextPage">
+                <source>Next page</source>
+                <target>Volgende pagina</target>
+            </trans-unit>
+            <trans-unit id="action.deleteBlacklisting">
+                <source>Delete blacklisting</source>
+                <target>Verwijder de zwarte lijst</target>
+            </trans-unit>
+            <trans-unit id="field.localeFilter">
+                <source>Locale filter</source>
+                <target>Lokaal filter</target>
+            </trans-unit>
+            <trans-unit id="field.stateFilter">
+                <source>State filter</source>
+                <target>Staatsfilter</target>
+            </trans-unit>
+            <trans-unit id="field.rowsPerPage">
+                <source>Rows per page</source>
+                <target>Rijen per pagina</target>
+            </trans-unit>
+            <trans-unit id="field.strategy">
+                <source>Strategy</source>
+                <target>Strategie</target>
+            </trans-unit>
+            <trans-unit id="option.allLocales">
+                <source>All locales</source>
+                <target>Alle landinstellingen</target>
+            </trans-unit>
+            <trans-unit id="option.allStates">
+                <source>All states</source>
+                <target>Alle staten</target>
+            </trans-unit>
+            <trans-unit id="label.keys">
+                <source>keys</source>
+                <target>sleutels</target>
+            </trans-unit>
+            <trans-unit id="placeholder.findingSearchRich">
+                <source>Search by text, key, or file</source>
+                <target>Zoek op tekst, sleutel of bestand</target>
+            </trans-unit>
+            <trans-unit id="message.permanentIgnores">
+                <source>These entries are hidden by the permanent ignore list. Delete blacklist entries to show them in scans again.</source>
+                <target>Deze vermeldingen worden verborgen door de permanente negeerlijst. Verwijder vermeldingen op de zwarte lijst om ze opnieuw in scans weer te geven.</target>
+            </trans-unit>
+            <trans-unit id="message.noPermanentIgnores">
+                <source>No permanent ignore entries saved.</source>
+                <target>Er zijn geen permanente negeervermeldingen opgeslagen.</target>
+            </trans-unit>
+            <trans-unit id="message.deleteBlacklisting">
+                <source>Select entries in the list and delete the blacklisting to restore the default scanner result.</source>
+                <target>Selecteer vermeldingen in de lijst en verwijder de zwarte lijst om het standaardscannerresultaat te herstellen.</target>
+            </trans-unit>
+            <trans-unit id="extconf.allowProductionWrites">
+                <source>Allow production writes. Keep disabled unless this instance may write XLF files in production. Write actions are protected by backend permissions and form tokens.</source>
+                <target>Productieschrijfacties toestaan. Laat dit uitgeschakeld tenzij deze instantie XLF-bestanden in productie mag schrijven. Schrijfacties zijn beschermd door backendrechten en formulier-tokens.</target>
+            </trans-unit>
+        </body>
+    </file>
+</xliff>

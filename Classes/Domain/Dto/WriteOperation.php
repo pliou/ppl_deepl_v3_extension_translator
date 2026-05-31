@@ -47,9 +47,12 @@ final class WriteOperation
         return match ($this->operationType) {
             'append' => 'Add XLF unit',
             'update' => 'Update XLF unit',
+            'update_source' => 'Update XLF source',
+            'change_xlf_key' => 'Change XLF key to matching key',
+            'replace_code_key' => 'Carry code usage to matching key',
+            'replace_config_label' => 'Replace config label reference',
             'rename_keyless' => 'Assign key to XLF unit',
             'delete' => 'Delete XLF unit',
-            'create_file' => 'Create XLF file',
             default => $this->operationType,
         };
     }

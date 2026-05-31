@@ -118,8 +118,8 @@ final class TranslationFinding
     public function withCannotChange(string $reason): self
     {
         return new self(
-            TranslationFinding::buildId(TranslationIssueType::CANNOT_CHANGE, $this->languageFile, $this->locale, $this->transUnitId),
-            TranslationIssueType::CANNOT_CHANGE,
+            $this->findingId,
+            $this->issueType,
             $this->extensionKey,
             $this->languageFile,
             $this->absoluteLanguageFile,
@@ -133,14 +133,14 @@ final class TranslationFinding
             false,
             false,
             $this->errorState,
-            $this->baseIssueType !== '' ? $this->baseIssueType : $this->issueType,
+            $this->baseIssueType,
             $this->expectedLanguageFile,
             $this->sourceStatus,
             $this->sourceOrigin,
             $this->usageLocations,
             $this->relatedCandidates,
-            ['show_reason', 'copy_details', 'export_findings'],
-            ActionState::CANNOT_CHANGE,
+            $this->recommendedActions,
+            $this->actionState,
             false,
             $reason,
             $this->metadata
@@ -190,7 +190,6 @@ final class TranslationFinding
             'canChange' => $this->canChange,
             'can_change' => $this->canChange,
             'cannotChangeReason' => $this->cannotChangeReason,
-            'cannot_change_reason' => $this->cannotChangeReason,
             'requiresDeepl' => $this->requiresDeepl,
             'errorState' => $this->errorState,
             'metadata' => $this->metadata,
@@ -209,7 +208,10 @@ final class TranslationFinding
             $key = (string)($candidate['key'] ?? $candidate['transUnitId'] ?? '');
             $file = (string)($candidate['file'] ?? $candidate['languageFile'] ?? '');
             $source = (string)($candidate['source'] ?? $candidate['text'] ?? '');
-            $labels[] = trim($key . ($file !== '' ? ' @ ' . $file : '') . ($source !== '' ? ' = ' . $source : ''));
+            $target = (string)($candidate['target'] ?? '');
+            $meta = trim($key . ($file !== '' ? ' @ ' . $file : ''));
+            $text = $source !== '' ? $source : $target;
+            $labels[] = trim($text . ($text !== '' && $meta !== '' ? ' - ' : '') . $meta);
         }
 
         return implode(', ', array_values(array_filter($labels)));

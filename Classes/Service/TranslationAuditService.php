@@ -31,14 +31,15 @@ final class TranslationAuditService
         $allLanguageFiles = $this->xlfReader->findLanguageFiles($scope);
         $languageFiles = $this->selectedLanguageFiles($allLanguageFiles, $selectedLanguageFiles);
         $codeKeys = $this->keyScanner->scan($scope);
+        $hardcodedConfigLabels = $this->keyScanner->scanHardcodedConfigLabels($scope);
         $groups = $this->groupLanguageFiles($languageFiles);
         $sourceIndex = $this->buildSourceTextIndex($languageFiles);
-        $expectedTargetLocales = $this->expectedTargetLocales($groups);
         $findings = [];
 
         $this->addKeylessUnitFindings($findings, $scope, $languageFiles, $codeKeys);
         $this->addMissingSourceFindings($findings, $scope, $languageFiles, $groups, $codeKeys, $sourceIndex);
-        $this->addLocaleGapFindings($findings, $scope, $groups, $expectedTargetLocales);
+        $this->addHardcodedConfigLabelFindings($findings, $scope, $languageFiles, $groups, $hardcodedConfigLabels);
+        $this->addLocaleGapFindings($findings, $scope, $groups);
         $this->addMissingTargetFindings($findings, $scope, $groups);
         $this->addSuspiciousValueFindings($findings, $scope, $groups);
         $this->addUnusedCandidateFindings($findings, $scope, $languageFiles, $groups, $codeKeys);
@@ -152,7 +153,7 @@ final class TranslationAuditService
                     'keyless_unit',
                     [],
                     $related,
-                    ['enter_key_manually', 'link_keyless_unit_to_key', 'delete_invalid_unit_with_backup', 'ignore_finding_for_run'],
+                    ['enter_key_manually', 'link_keyless_unit_to_key', 'delete_invalid_unit', 'ignore_finding_for_run', 'ignore_finding_permanently'],
                     ActionState::NEEDS_SOURCE,
                     [
                         'keylessSequence' => $unit->sequence,
@@ -177,11 +178,18 @@ final class TranslationAuditService
         foreach ($codeKeys as $key => $data) {
             $candidateFiles = $this->sourceFilesForCodeKey($languageFiles, $groups, $data['languageFiles'], $data['sourceFiles']);
             foreach ($candidateFiles as $file) {
-                if ($file->hasUnit($key)) {
+                $defaultValue = trim((string)($data['defaultValue'] ?? ''));
+                $existingUnit = $file->getUnit($key);
+                if ($existingUnit instanceof XlfTransUnit) {
+                    if ($existingUnit->hasSource && trim($existingUnit->source) !== '') {
+                        continue;
+                    }
+
+                    $sourceCandidates = $defaultValue !== '' ? $this->sourceCandidatesByText($sourceIndex, $defaultValue, $key) : [];
+                    $this->addExistingUnitMissingSourceFinding($findings, $scope, $groups, $data, $file, $existingUnit, $key, $defaultValue, $sourceCandidates, $codeKeys);
                     continue;
                 }
 
-                $defaultValue = trim((string)($data['defaultValue'] ?? ''));
                 $keylessCandidates = $defaultValue !== '' ? $this->keylessCandidatesByText($languageFiles, $defaultValue) : [];
                 $sourceCandidates = $defaultValue !== '' ? $this->sourceCandidatesByText($sourceIndex, $defaultValue, $key) : [];
                 if ($sourceCandidates !== []) {
@@ -201,9 +209,9 @@ final class TranslationAuditService
                         $first['file']->relativePath . ':' . $first['key'],
                         $data['sourceFiles'],
                         $this->candidateRows($sourceCandidates, $codeKeys),
-                        ['create_alias_source_unit', 'use_existing_key_in_code', 'mark_intentionally_reused', 'ignore_finding_for_run'],
+                        ['change_key_to_matching_key', 'create_alias_source_unit', 'ignore_finding_for_run', 'ignore_finding_permanently'],
                         ActionState::REVIEW_ONLY,
-                        ['defaultValue' => $defaultValue]
+                        ['defaultValue' => $defaultValue, 'sourceExists' => false]
                     );
                     continue;
                 }
@@ -217,42 +225,91 @@ final class TranslationAuditService
                         $file,
                         $file->locale,
                         $key,
-                        (string)$first['source'],
+                        '',
                         '',
                         (string)$first['source'],
                         $data['sourceFiles'],
                         $scope->writeAllowed,
-                        SourceStatus::SOURCE_KNOWN_FROM_OTHER_LOCALE,
+                        SourceStatus::LOCALE_CANDIDATE_ONLY,
                         (string)$first['file'] . ':' . (string)$first['locale'],
                         $data['sourceFiles'],
                         $localeCandidates,
-                        ['use_other_locale_as_source', 'enter_source_manually', 'mark_locale_source_candidate_reviewed', 'ignore_finding_for_run'],
-                        ActionState::READY_TO_WRITE,
+                        ['use_other_locale_as_source', 'enter_source_manually', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+                        ActionState::NEEDS_SOURCE,
                         ['defaultValue' => $defaultValue]
                     );
                     continue;
                 }
 
-                $sourceStatus = $keylessCandidates !== [] ? SourceStatus::SOURCE_KNOWN_FROM_KEYLESS_UNIT : SourceStatus::MANUAL_SOURCE_REQUIRED;
-                $sourceValue = (string)($keylessCandidates[0]['source'] ?? '');
+                if ($keylessCandidates !== []) {
+                    $findings[] = $this->createFinding(
+                        TranslationIssueType::MISSING_SOURCE_UNIT,
+                        $scope,
+                        $file,
+                        $file->locale,
+                        $key,
+                        '',
+                        '',
+                        '',
+                        $data['sourceFiles'],
+                        $scope->writeAllowed,
+                        SourceStatus::SOURCE_KNOWN_FROM_KEYLESS_UNIT,
+                        'keyless_unit',
+                        $data['sourceFiles'],
+                        $keylessCandidates,
+                        ['enter_source_text', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+                        ActionState::NEEDS_SOURCE,
+                        ['defaultValue' => $defaultValue]
+                    );
+                    continue;
+                }
+
+                if ($defaultValue !== '') {
+                    $findings[] = $this->createFinding(
+                        TranslationIssueType::MISSING_TRANSLATION_UNIT,
+                        $scope,
+                        $file,
+                        $file->locale,
+                        $key,
+                        $defaultValue,
+                        '',
+                        $defaultValue,
+                        $data['sourceFiles'],
+                        $scope->writeAllowed,
+                        SourceStatus::SOURCE_KNOWN,
+                        'code_default_value',
+                        $data['sourceFiles'],
+                        [],
+                        ['create_manual_translation_unit', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+                        ActionState::NEEDS_SOURCE,
+                        [
+                            'defaultValue' => $defaultValue,
+                            'sourceExists' => false,
+                            'targetExists' => false,
+                            'targetLanguageFiles' => $this->targetLanguageFilesForSourceFile($groups, $file),
+                        ]
+                    );
+                    continue;
+                }
+
                 $findings[] = $this->createFinding(
                     TranslationIssueType::MISSING_SOURCE_UNIT,
                     $scope,
                     $file,
                     $file->locale,
                     $key,
-                    $sourceValue,
+                    '',
                     '',
                     '',
                     $data['sourceFiles'],
                     $scope->writeAllowed,
-                    $sourceStatus,
-                    $keylessCandidates !== [] ? 'keyless_unit' : '',
+                    SourceStatus::MANUAL_SOURCE_REQUIRED,
+                    '',
                     $data['sourceFiles'],
-                    $keylessCandidates,
-                    ['enter_source_text', 'use_key_as_temporary_source', 'write_todo_source', 'link_to_candidate', 'ignore_finding_for_run'],
+                    [],
+                    ['enter_source_text', 'ignore_finding_for_run', 'ignore_finding_permanently'],
                     ActionState::NEEDS_SOURCE,
-                    ['defaultValue' => $defaultValue]
+                    ['defaultValue' => $defaultValue, 'sourceExists' => false]
                 );
             }
         }
@@ -261,61 +318,199 @@ final class TranslationAuditService
     /**
      * @param TranslationFinding[] $findings
      * @param array<string, array{source: ?XlfTranslationFile, targets: XlfTranslationFile[]}> $groups
-     * @param string[] $expectedTargetLocales
+     * @param array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]} $data
+     * @param array<int, array{key: string, file: XlfTranslationFile, unit: XlfTransUnit}> $sourceCandidates
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $codeKeys
      */
-    private function addLocaleGapFindings(array &$findings, ScanScope $scope, array $groups, array $expectedTargetLocales): void
-    {
-        if ($expectedTargetLocales === []) {
+    private function addExistingUnitMissingSourceFinding(
+        array &$findings,
+        ScanScope $scope,
+        array $groups,
+        array $data,
+        XlfTranslationFile $file,
+        XlfTransUnit $unit,
+        string $key,
+        string $defaultValue,
+        array $sourceCandidates,
+        array $codeKeys
+    ): void {
+        $metadata = [
+            'defaultValue' => $defaultValue,
+            'sourceExists' => true,
+            'targetExists' => $unit->hasTarget,
+            'hasSource' => $unit->hasSource,
+        ];
+
+        if ($sourceCandidates !== []) {
+            $first = $sourceCandidates[0];
+            $findings[] = $this->createFinding(
+                TranslationIssueType::KEY_MISMATCH_CANDIDATE,
+                $scope,
+                $file,
+                $file->locale,
+                $key,
+                $first['unit']->source,
+                $unit->targetValue,
+                $first['unit']->source,
+                $data['sourceFiles'],
+                $scope->writeAllowed,
+                SourceStatus::SOURCE_KNOWN_FROM_OTHER_KEY,
+                $first['file']->relativePath . ':' . $first['key'],
+                $data['sourceFiles'],
+                $this->candidateRows($sourceCandidates, $codeKeys),
+                ['change_key_to_matching_key', 'create_alias_source_unit', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+                ActionState::REVIEW_ONLY,
+                $metadata
+            );
             return;
         }
 
+        $localeCandidates = $this->localeSourceCandidates($groups, $file, $key);
+        if ($localeCandidates !== []) {
+            $first = $localeCandidates[0];
+            $findings[] = $this->createFinding(
+                TranslationIssueType::MISSING_SOURCE_FROM_LOCALE_CANDIDATE,
+                $scope,
+                $file,
+                $file->locale,
+                $key,
+                '',
+                $unit->targetValue,
+                (string)$first['source'],
+                $data['sourceFiles'],
+                $scope->writeAllowed,
+                SourceStatus::LOCALE_CANDIDATE_ONLY,
+                (string)$first['file'] . ':' . (string)$first['locale'],
+                $data['sourceFiles'],
+                $localeCandidates,
+                ['use_other_locale_as_source', 'enter_source_manually', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+                ActionState::NEEDS_SOURCE,
+                $metadata
+            );
+            return;
+        }
+
+        $findings[] = $this->createFinding(
+            TranslationIssueType::MISSING_SOURCE_UNIT,
+            $scope,
+            $file,
+            $file->locale,
+            $key,
+            '',
+            $unit->targetValue,
+            '',
+            $data['sourceFiles'],
+            $scope->writeAllowed,
+            SourceStatus::MANUAL_SOURCE_REQUIRED,
+            $file->relativePath,
+            $data['sourceFiles'],
+            [],
+            ['enter_source_text', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+            ActionState::NEEDS_SOURCE,
+            $metadata
+        );
+    }
+
+    /**
+     * @param TranslationFinding[] $findings
+     * @param XlfTranslationFile[] $languageFiles
+     * @param array<string, array{source: ?XlfTranslationFile, targets: XlfTranslationFile[]}> $groups
+     * @param array<int, array{key: string, sourceFile: string, absoluteSourceFile: string, line: int, languageFile: string, defaultValue: string, originalNeedle: string, replacementNeedle: string}> $hardcodedConfigLabels
+     */
+    private function addHardcodedConfigLabelFindings(array &$findings, ScanScope $scope, array $languageFiles, array $groups, array $hardcodedConfigLabels): void
+    {
+        foreach ($hardcodedConfigLabels as $label) {
+            $key = trim((string)$label['key']);
+            $defaultValue = trim((string)$label['defaultValue']);
+            if ($key === '' || $defaultValue === '') {
+                continue;
+            }
+
+            $sourceFiles = [(string)$label['sourceFile']];
+            $candidateFiles = $this->sourceFilesForCodeKey(
+                $languageFiles,
+                $groups,
+                [(string)$label['languageFile']],
+                $sourceFiles
+            );
+
+            foreach ($candidateFiles as $file) {
+                $existingUnit = $file->getUnit($key);
+                $sourceExists = $existingUnit instanceof XlfTransUnit && $existingUnit->hasSource && trim($existingUnit->source) !== '';
+                $sourceValue = $sourceExists && $existingUnit instanceof XlfTransUnit ? $existingUnit->source : $defaultValue;
+
+                $findings[] = $this->createFinding(
+                    TranslationIssueType::MISSING_TRANSLATION_UNIT,
+                    $scope,
+                    $file,
+                    $file->locale,
+                    $key,
+                    $sourceValue,
+                    $existingUnit instanceof XlfTransUnit ? $existingUnit->targetValue : '',
+                    $defaultValue,
+                    $sourceFiles,
+                    $scope->writeAllowed,
+                    SourceStatus::SOURCE_KNOWN,
+                    'hardcoded_config_label',
+                    $sourceFiles,
+                    [],
+                    ['create_manual_translation_unit', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+                    ActionState::READY_TO_WRITE,
+                    [
+                        'defaultValue' => $defaultValue,
+                        'sourceExists' => $sourceExists,
+                        'targetExists' => $existingUnit instanceof XlfTransUnit && $existingUnit->hasTarget,
+                        'hardcodedConfigLabel' => $label,
+                        'targetLanguageFiles' => $this->targetLanguageFilesMissingKey($groups, $file, $key),
+                    ]
+                );
+
+                break;
+            }
+        }
+    }
+
+    /**
+     * @param TranslationFinding[] $findings
+     * @param array<string, array{source: ?XlfTranslationFile, targets: XlfTranslationFile[]}> $groups
+     */
+    private function addLocaleGapFindings(array &$findings, ScanScope $scope, array $groups): void
+    {
         foreach ($groups as $group) {
             $sourceFile = $group['source'];
             if (!$sourceFile instanceof XlfTranslationFile) {
                 continue;
             }
 
-            $existing = [];
             foreach ($group['targets'] as $targetFile) {
-                if ($targetFile->locale !== '') {
-                    $existing[$targetFile->locale] = true;
-                }
-            }
+                foreach ($sourceFile->units as $id => $sourceUnit) {
+                    if ($targetFile->hasUnit($id) || $this->isTodoValue($sourceUnit->source)) {
+                        continue;
+                    }
 
-            foreach ($expectedTargetLocales as $locale) {
-                if (isset($existing[$locale])) {
-                    continue;
+                    $findings[] = $this->createFinding(
+                        TranslationIssueType::LOCALE_GAP,
+                        $scope,
+                        $targetFile,
+                        $targetFile->locale,
+                        $id,
+                        $sourceUnit->source,
+                        '',
+                        '',
+                        [],
+                        $scope->writeAllowed,
+                        SourceStatus::SOURCE_KNOWN,
+                        $sourceFile->relativePath,
+                        [],
+                        [],
+                        ['copy_source_unit_without_target', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+                        ActionState::READY_TO_WRITE,
+                        [
+                            'targetExists' => false,
+                            'sourceLanguageFile' => $sourceFile->relativePath,
+                        ]
+                    );
                 }
-
-                $targetRelativePath = $this->targetRelativePath($sourceFile, $locale);
-                $findings[] = $this->createFinding(
-                    TranslationIssueType::LOCALE_GAP,
-                    $scope,
-                    $sourceFile,
-                    $locale,
-                    $sourceFile->baseName,
-                    '',
-                    '',
-                    '',
-                    [],
-                    $scope->writeAllowed,
-                    SourceStatus::NOT_TRANSLATABLE,
-                    '',
-                    [],
-                    [],
-                    ['create_target_xlf_file', 'create_missing_units_as_todo', 'create_missing_units_with_deepl', 'ignore_finding_for_run'],
-                    ActionState::READY_TO_WRITE,
-                    [
-                        'targetRelativePath' => $targetRelativePath,
-                        'targetAbsolutePath' => dirname($sourceFile->absolutePath) . '/' . basename($targetRelativePath),
-                        'sourceRelativePath' => $sourceFile->relativePath,
-                        'sourceLanguage' => $sourceFile->sourceLanguage,
-                        'sourceUnits' => array_map(static fn(XlfTransUnit $unit): array => [
-                            'id' => $unit->transUnitId,
-                            'source' => $unit->source,
-                        ], array_values($sourceFile->units)),
-                    ]
-                );
             }
         }
     }
@@ -334,8 +529,15 @@ final class TranslationAuditService
 
             foreach ($group['targets'] as $targetFile) {
                 foreach ($sourceFile->units as $id => $sourceUnit) {
+                    if ($this->isTodoValue($sourceUnit->source)) {
+                        continue;
+                    }
+
                     $targetUnit = $targetFile->getUnit($id);
-                    if ($targetUnit instanceof XlfTransUnit && $targetUnit->hasTarget && trim($targetUnit->targetValue) !== '') {
+                    if (!$targetUnit instanceof XlfTransUnit) {
+                        continue;
+                    }
+                    if ($targetUnit->hasTarget && trim($targetUnit->targetValue) !== '') {
                         continue;
                     }
 
@@ -346,7 +548,7 @@ final class TranslationAuditService
                         $targetFile->locale,
                         $id,
                         $sourceUnit->source,
-                        $targetUnit instanceof XlfTransUnit ? $targetUnit->targetValue : '',
+                        $targetUnit->targetValue,
                         $sourceUnit->source,
                         [],
                         $scope->writeAllowed,
@@ -354,12 +556,11 @@ final class TranslationAuditService
                         $sourceFile->relativePath,
                         [],
                         [],
-                        ['create_deepl_target_suggestion', 'copy_source_value', 'write_todo_target', 'enter_target_text', 'create_empty_target_unit', 'ignore_finding_for_run'],
+                        ['create_deepl_target_suggestion', 'copy_source_value', 'write_todo_target', 'enter_target_text', 'create_empty_target_unit', 'ignore_finding_for_run', 'ignore_finding_permanently'],
                         ActionState::READY_TO_CREATE_SUGGESTION,
                         [
-                            'targetExists' => $targetUnit instanceof XlfTransUnit,
+                            'targetExists' => true,
                             'sourceLanguageFile' => $sourceFile->relativePath,
-                            'fixtureCannotChange' => $id === 'readonly.case',
                         ]
                     );
                 }
@@ -375,13 +576,55 @@ final class TranslationAuditService
     {
         foreach ($groups as $group) {
             $sourceFile = $group['source'];
+            if ($sourceFile instanceof XlfTranslationFile) {
+                foreach ($sourceFile->units as $id => $sourceUnit) {
+                    if (!$this->isTodoValueForFile($sourceUnit->source, $scope, $sourceFile)) {
+                        continue;
+                    }
+
+                    $findings[] = $this->createFinding(
+                        TranslationIssueType::TODO_SOURCE,
+                        $scope,
+                        $sourceFile,
+                        $sourceFile->locale,
+                        $id,
+                        $sourceUnit->source,
+                        $sourceUnit->targetValue,
+                        '',
+                        [],
+                        $scope->writeAllowed,
+                        SourceStatus::MANUAL_SOURCE_REQUIRED,
+                        $sourceFile->relativePath,
+                        [],
+                        [],
+                        ['enter_source_text', 'ignore_finding_for_run', 'ignore_finding_permanently'],
+                        ActionState::NEEDS_SOURCE,
+                        [
+                            'sourceExists' => true,
+                            'targetExists' => $sourceUnit->hasTarget,
+                        ]
+                    );
+                }
+            }
+
             foreach ($group['targets'] as $targetFile) {
                 foreach ($targetFile->units as $id => $targetUnit) {
                     $sourceUnit = $sourceFile instanceof XlfTranslationFile ? $sourceFile->getUnit($id) : null;
                     $sourceValue = $sourceUnit instanceof XlfTransUnit ? $sourceUnit->source : $targetUnit->source;
                     $targetValue = $targetUnit->hasTarget ? $targetUnit->targetValue : '';
 
-                    if (str_starts_with(ltrim($targetValue), 'TODO:')) {
+                    if (
+                        $this->isExtensionTranslatorLanguageFile($scope, $targetFile)
+                        && ($this->isTodoValue($sourceValue) || $this->isTodoValue($targetValue))
+                    ) {
+                        continue;
+                    }
+
+                    if ($sourceFile instanceof XlfTranslationFile && $this->isTodoValueForFile($sourceValue, $scope, $sourceFile)) {
+                        continue;
+                    }
+
+                    if ($this->isTodoValueForFile($targetValue, $scope, $targetFile)) {
                         $findings[] = $this->createFinding(
                             TranslationIssueType::TODO_VALUE,
                             $scope,
@@ -397,10 +640,11 @@ final class TranslationAuditService
                             $sourceFile instanceof XlfTranslationFile ? $sourceFile->relativePath : '',
                             [],
                             [],
-                            ['create_deepl_target_suggestion', 'enter_target_text', 'copy_source_value', 'keep_todo_in_run', 'mark_todo_reviewed'],
+                            ['create_deepl_target_suggestion', 'enter_target_text', 'copy_source_value', 'keep_todo_in_run', 'ignore_finding_for_run', 'ignore_finding_permanently'],
                             ActionState::READY_TO_CREATE_SUGGESTION,
                             ['targetExists' => true]
                         );
+                        continue;
                     }
 
                     if ($targetValue !== '' && $sourceValue !== '' && trim($targetValue) === trim($sourceValue)) {
@@ -419,7 +663,7 @@ final class TranslationAuditService
                             $sourceFile instanceof XlfTranslationFile ? $sourceFile->relativePath : '',
                             [],
                             [],
-                            ['ignore_finding_for_run', 'always_ignore_key', 'add_to_edit_list', 'enter_target_text', 'create_deepl_target_suggestion', 'prefix_with_todo'],
+                            ['ignore_finding_for_run', 'ignore_finding_permanently', 'enter_target_text', 'create_deepl_target_suggestion', 'prefix_with_todo'],
                             ActionState::REVIEW_ONLY,
                             ['targetExists' => true]
                         );
@@ -458,7 +702,7 @@ final class TranslationAuditService
                     '',
                     [],
                     $this->sameKeyCandidates($groups, $file, $id),
-                    ['show_scanned_usage', 'mark_dynamic_keep', 'ignore_finding_for_run', 'delete_target_locale_only', 'delete_source_and_targets'],
+                    ['delete_translation_unit', 'ignore_finding_for_run', 'ignore_finding_permanently'],
                     ActionState::REVIEW_ONLY,
                     ['targetExists' => true]
                 );
@@ -564,9 +808,12 @@ final class TranslationAuditService
     {
         $index = [];
         foreach ($languageFiles as $file) {
+            if (!$file->canonical) {
+                continue;
+            }
             foreach ($file->units as $key => $unit) {
-                $source = trim($unit->source !== '' ? $unit->source : $unit->targetValue);
-                if ($source === '') {
+                $source = trim($unit->source);
+                if ($source === '' || $this->isTodoValue($source)) {
                     continue;
                 }
                 $index[mb_strtolower($source)][] = [
@@ -630,7 +877,7 @@ final class TranslationAuditService
         foreach ($languageFiles as $file) {
             foreach ($file->keylessUnits as $unit) {
                 $unitText = trim($unit->source !== '' ? $unit->source : $unit->targetValue);
-                if ($unitText === '' || mb_strtolower($unitText) !== $normalized) {
+                if ($unitText === '' || $this->isTodoValue($unitText) || mb_strtolower($unitText) !== $normalized) {
                     continue;
                 }
                 $matches[] = [
@@ -696,7 +943,7 @@ final class TranslationAuditService
                 continue;
             }
             $source = trim($targetUnit->targetValue !== '' ? $targetUnit->targetValue : $targetUnit->source);
-            if ($source === '') {
+            if ($source === '' || $this->isTodoValue($source)) {
                 continue;
             }
             $candidates[] = [
@@ -751,6 +998,98 @@ final class TranslationAuditService
         return $candidates;
     }
 
+    private function isTodoValue(string $value): bool
+    {
+        return preg_match('/^\s*TODO\s*(?::.*)?$/iu', $value) === 1;
+    }
+
+    private function isTodoValueForFile(string $value, ScanScope $scope, XlfTranslationFile $file): bool
+    {
+        if ($this->isExtensionTranslatorLanguageFile($scope, $file)) {
+            return false;
+        }
+
+        return $this->isTodoValue($value);
+    }
+
+    private function isExtensionTranslatorLanguageFile(ScanScope $scope, XlfTranslationFile $file): bool
+    {
+        if ($scope->extensionKey === 'ppl_deepl_v3_extension_translator') {
+            return true;
+        }
+
+        $relativePath = trim(str_replace('\\', '/', $file->relativePath), '/');
+
+        return $relativePath === 'ppl_deepl_v3_extension_translator'
+            || str_starts_with($relativePath . '/', 'ppl_deepl_v3_extension_translator/');
+    }
+
+    /**
+     * @param XlfTranslationFile[] $languageFiles
+     */
+    private function hasAnyUnitWithKey(array $languageFiles, string $key): bool
+    {
+        foreach ($languageFiles as $file) {
+            if ($file->hasUnit($key)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<string, array{source: ?XlfTranslationFile, targets: XlfTranslationFile[]}> $groups
+     * @return array<int, array{languageFile: string, absoluteLanguageFile: string, locale: string}>
+     */
+    private function targetLanguageFilesForSourceFile(array $groups, XlfTranslationFile $sourceFile): array
+    {
+        $groupKey = $this->languageFileGroupKey($sourceFile);
+        $group = $groups[$groupKey] ?? null;
+        if (!is_array($group)) {
+            return [];
+        }
+
+        $targets = [];
+        foreach ($group['targets'] as $targetFile) {
+            $targets[] = [
+                'languageFile' => $targetFile->relativePath,
+                'absoluteLanguageFile' => $targetFile->absolutePath,
+                'locale' => $targetFile->locale,
+            ];
+        }
+
+        return $targets;
+    }
+
+    /**
+     * @param array<string, array{source: ?XlfTranslationFile, targets: XlfTranslationFile[]}> $groups
+     * @return array<int, array{languageFile: string, absoluteLanguageFile: string, locale: string}>
+     */
+    private function targetLanguageFilesMissingKey(array $groups, XlfTranslationFile $sourceFile, string $key): array
+    {
+        $groupKey = $this->languageFileGroupKey($sourceFile);
+        $group = $groups[$groupKey] ?? null;
+        if (!is_array($group)) {
+            return [];
+        }
+
+        $targets = [];
+        foreach ($group['targets'] as $targetFile) {
+            if ($targetFile->hasUnit($key)) {
+                continue;
+            }
+
+            $targets[] = [
+                'languageFile' => $targetFile->relativePath,
+                'absoluteLanguageFile' => $targetFile->absolutePath,
+                'locale' => $targetFile->locale,
+            ];
+        }
+
+        return $targets;
+    }
+
     /**
      * @param array<string, array{source: ?XlfTranslationFile, targets: XlfTranslationFile[]}> $groups
      * @return string[]
@@ -788,7 +1127,7 @@ final class TranslationAuditService
                 $reason = 'File is not writable';
             }
 
-            if ($reason === '' || $finding->issueType === TranslationIssueType::CANNOT_CHANGE) {
+            if ($reason === '') {
                 return $finding;
             }
 
@@ -822,17 +1161,15 @@ final class TranslationAuditService
         string $actionState,
         array $metadata = []
     ): TranslationFinding {
-        $fixtureCannotChange = !empty($metadata['fixtureCannotChange']);
-        $effectiveIssueType = $fixtureCannotChange ? TranslationIssueType::CANNOT_CHANGE : $issueType;
         $languageFile = (string)($metadata['targetRelativePath'] ?? $file->relativePath);
         $absoluteLanguageFile = (string)($metadata['targetAbsolutePath'] ?? $file->absolutePath);
-        $id = TranslationFinding::buildId($effectiveIssueType, $languageFile, $locale, $transUnitId);
-        $canChange = !$fixtureCannotChange && $canWrite && !$scope->readOnly;
+        $id = TranslationFinding::buildId($issueType, $languageFile, $locale, $transUnitId);
+        $canChange = $canWrite && !$scope->readOnly;
         $metadata['displayLocale'] ??= $this->displayLocaleForFile($file, $locale);
 
         return new TranslationFinding(
             $id,
-            $effectiveIssueType,
+            $issueType,
             $scope->extensionKey,
             $languageFile,
             $absoluteLanguageFile,
@@ -842,7 +1179,7 @@ final class TranslationAuditService
             $currentTargetValue,
             $suggestedValue,
             $sourceFiles,
-            $scope->readOnly || $fixtureCannotChange,
+            $scope->readOnly,
             $canChange,
             false,
             '',
@@ -853,9 +1190,9 @@ final class TranslationAuditService
             $usageLocations,
             $relatedCandidates,
             $recommendedActions,
-            $fixtureCannotChange ? ActionState::CANNOT_CHANGE : $actionState,
+            $actionState,
             $canChange,
-            $fixtureCannotChange ? 'Fixture read-only case' : '',
+            '',
             $metadata
         );
     }

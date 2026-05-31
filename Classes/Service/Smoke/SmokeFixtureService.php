@@ -17,6 +17,24 @@ final class SmokeFixtureService
             'Resources/Private/Language/locallang.xlf',
             'Resources/Private/Language/de.locallang.xlf',
             'Resources/Private/Language/locallang_db.xlf',
+            'Resources/Private/Language/de.locallang_db.xlf',
+        ];
+    }
+
+    /**
+     * @return string[]
+     */
+    public function fixtureFiles(): array
+    {
+        return [
+            ...$this->languageFiles(),
+            'Configuration/TCA/Overrides/pages.php',
+            'Configuration/TypoScript/setup.typoscript',
+            'Classes/Controller/SmokeController.php',
+            'Classes/Service/SmokeLabelService.php',
+            'Resources/Private/Templates/Smoke/Index.html',
+            'Resources/Private/Partials/Smoke/Labels.html',
+            'Resources/Public/JavaScript/smoke-labels.js',
         ];
     }
 
@@ -42,14 +60,34 @@ final class SmokeFixtureService
     public function restoreFixture(string $fixturePath, string $artifactRoot): void
     {
         $baselineRoot = $artifactRoot . '/fixture-baseline';
+        $seedRoot = $this->seedRoot($fixturePath);
+        if ($seedRoot !== null) {
+            $seedBaselineRoot = $artifactRoot . '/fixture-seed-baseline';
+            if (!is_dir($seedBaselineRoot)) {
+                $this->snapshot($seedRoot, $seedBaselineRoot);
+            } else {
+                $this->copyFiles($seedBaselineRoot, $seedRoot);
+            }
+            $this->copyFiles($seedRoot, $fixturePath);
+            if (!is_dir($baselineRoot)) {
+                $this->snapshot($fixturePath, $baselineRoot);
+            }
+            return;
+        }
+
         if (!is_dir($baselineRoot)) {
             $this->snapshot($fixturePath, $baselineRoot);
             return;
         }
 
-        foreach ($this->languageFiles() as $relativeFile) {
-            $source = $baselineRoot . '/' . $relativeFile;
-            $target = rtrim($fixturePath, '/') . '/' . $relativeFile;
+        $this->copyFiles($baselineRoot, $fixturePath);
+    }
+
+    private function copyFiles(string $sourceRoot, string $targetRoot): void
+    {
+        foreach ($this->fixtureFiles() as $relativeFile) {
+            $source = rtrim($sourceRoot, '/') . '/' . $relativeFile;
+            $target = rtrim($targetRoot, '/') . '/' . $relativeFile;
             if (!is_file($source)) {
                 continue;
             }
@@ -59,16 +97,11 @@ final class SmokeFixtureService
             }
             copy($source, $target);
         }
-
-        $dbTarget = rtrim($fixturePath, '/') . '/Resources/Private/Language/de.locallang_db.xlf';
-        if (is_file($dbTarget)) {
-            unlink($dbTarget);
-        }
     }
 
     public function snapshot(string $fixturePath, string $targetRoot): void
     {
-        foreach ($this->languageFiles() as $relativeFile) {
+        foreach ($this->fixtureFiles() as $relativeFile) {
             $source = rtrim($fixturePath, '/') . '/' . $relativeFile;
             if (!is_file($source)) {
                 continue;
@@ -85,5 +118,15 @@ final class SmokeFixtureService
     private function extensionRoot(): string
     {
         return dirname(__DIR__, 3);
+    }
+
+    private function seedRoot(string $fixturePath): ?string
+    {
+        $seedRoot = rtrim($fixturePath, '/') . '/Tests/Fixtures/seed';
+        if (is_dir($seedRoot)) {
+            return $seedRoot;
+        }
+
+        return null;
     }
 }
