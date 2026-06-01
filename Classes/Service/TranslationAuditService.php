@@ -31,6 +31,7 @@ final class TranslationAuditService
         $allLanguageFiles = $this->xlfReader->findLanguageFiles($scope);
         $languageFiles = $this->selectedLanguageFiles($allLanguageFiles, $selectedLanguageFiles);
         $codeKeys = $this->keyScanner->scan($scope);
+        $codeKeys = $this->filterCodeKeysBySelectedLanguageFiles($codeKeys, $selectedLanguageFiles);
         $hardcodedConfigLabels = $this->keyScanner->scanHardcodedConfigLabels($scope);
         $groups = $this->groupLanguageFiles($languageFiles);
         $sourceIndex = $this->buildSourceTextIndex($languageFiles);
@@ -89,6 +90,60 @@ final class TranslationAuditService
             $languageFiles,
             static fn(XlfTranslationFile $file): bool => isset($lookup[$file->relativePath])
         ));
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $codeKeys
+     * @param string[] $selectedLanguageFiles
+     * @return array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}>
+     */
+    private function filterCodeKeysBySelectedLanguageFiles(array $codeKeys, array $selectedLanguageFiles): array
+    {
+        if ($selectedLanguageFiles === [] || in_array('__none__', $selectedLanguageFiles, true)) {
+            return $codeKeys;
+        }
+
+        $extensionPrefixes = $this->extensionPrefixesFromSelectedLanguageFiles($selectedLanguageFiles);
+        if ($extensionPrefixes === []) {
+            return $codeKeys;
+        }
+
+        return array_filter(
+            $codeKeys,
+            static function (array $data) use ($extensionPrefixes): bool {
+                foreach (array_merge($data['sourceFiles'], $data['languageFiles']) as $path) {
+                    $path = trim(str_replace('\\', '/', $path), '/');
+                    foreach ($extensionPrefixes as $extensionPrefix) {
+                        if ($path === $extensionPrefix || str_starts_with($path, $extensionPrefix . '/')) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+        );
+    }
+
+    /**
+     * @param string[] $selectedLanguageFiles
+     * @return string[]
+     */
+    private function extensionPrefixesFromSelectedLanguageFiles(array $selectedLanguageFiles): array
+    {
+        $prefixes = [];
+
+        foreach ($selectedLanguageFiles as $selectedLanguageFile) {
+            $selectedLanguageFile = trim(str_replace('\\', '/', $selectedLanguageFile), '/');
+            $languageRootPosition = strpos($selectedLanguageFile, '/Resources/Private/Language/');
+            if ($languageRootPosition === false || $languageRootPosition === 0) {
+                continue;
+            }
+
+            $prefixes[] = substr($selectedLanguageFile, 0, $languageRootPosition);
+        }
+
+        return array_values(array_unique($prefixes));
     }
 
     /**

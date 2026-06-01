@@ -132,6 +132,7 @@
             <trans-unit id="issue.unknown"><source>Unknown issue</source><target>Unbekanntes Issue</target></trans-unit>
             <trans-unit id="action.rescan"><source>Rescan</source><target>Neu scannen</target></trans-unit>
             <trans-unit id="action.selectedOnly"><source>Selected only</source><target>Nur ausgewählte</target></trans-unit>
+            <trans-unit id="action.selectExtensionFiles"><source>Select extension files</source><target>Extension-Dateien auswählen</target></trans-unit>
             <trans-unit id="action.selectVisible"><source>Select visible</source><target>Sichtbare auswählen</target></trans-unit>
             <trans-unit id="action.previousPage"><source>Previous page</source><target>Vorherige Seite</target></trans-unit>
             <trans-unit id="action.nextPage"><source>Next page</source><target>Nächste Seite</target></trans-unit>
@@ -143,10 +144,14 @@
             <trans-unit id="option.allLocales"><source>All locales</source><target>Alle Locales</target></trans-unit>
             <trans-unit id="option.allStates"><source>All states</source><target>Alle Status</target></trans-unit>
             <trans-unit id="label.keys"><source>keys</source><target>Keys</target></trans-unit>
+            <trans-unit id="label.fileKind.main"><source>Main labels</source><target>Hauptlabels</target></trans-unit>
+            <trans-unit id="label.fileKind.module"><source>Backend module</source><target>Backend-Modul</target></trans-unit>
+            <trans-unit id="label.fileKind.database"><source>Database labels</source><target>Datenbanklabels</target></trans-unit>
             <trans-unit id="placeholder.findingSearchRich"><source>Search by text, key, or file</source><target>Nach Text, Key oder Datei suchen</target></trans-unit>
             <trans-unit id="message.permanentIgnores"><source>These entries are hidden by the permanent ignore list. Delete blacklist entries to show them in scans again.</source><target>Diese Einträge werden durch die permanente Ignore-Liste ausgeblendet. Lösche Blacklist-Einträge, damit sie wieder im Scan erscheinen.</target></trans-unit>
             <trans-unit id="message.noPermanentIgnores"><source>No permanent ignore entries saved.</source><target>Keine permanenten Ignore-Einträge gespeichert.</target></trans-unit>
             <trans-unit id="message.deleteBlacklisting"><source>Select entries in the list and delete the blacklisting to restore the default scanner result.</source><target>Wähle Einträge in der Liste aus und lösche das Blacklisting, um das normale Scanner-Ergebnis wiederherzustellen.</target></trans-unit>
+            <trans-unit id="message.findingsLimited"><source>Showing %1$s of %2$s rows. Narrow the scan path or choose a specific issue tab to keep the workspace responsive.</source><target>%1$s von %2$s Zeilen werden angezeigt. Grenze den Scanpfad ein oder waehle einen konkreten Issue-Tab, damit der Arbeitsbereich reaktionsschnell bleibt.</target></trans-unit>
             <trans-unit id="extconf.allowProductionWrites">
                 <source>Allow production writes. Keep disabled unless this instance may write XLF files in production. Write actions are protected by backend permissions and form tokens.</source>
                 <target>Produktions-Schreibzugriffe erlauben. Deaktiviert lassen, au?er diese Instanz darf XLF-Dateien in Produktion schreiben. Schreibaktionen sind durch Backend-Berechtigungen und Formular-Tokens gesch?tzt.</target>

@@ -71,20 +71,42 @@
                             <button class="btn btn-default" type="button" data-role="files-deselect-all"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.deselectAll" /></button>
                         </div>
                         <div class="ppl-et__file-list" data-role="file-list">
-                            <f:for each="{report.languageFiles}" as="languageFile">
-                                <label class="ppl-et__file-item" data-role="file-item" data-search="{languageFile.searchText}">
-                                    <f:if condition="{languageFile.selected}">
-                                        <f:then><input type="checkbox" name="selected_language_files[]" value="{languageFile.relativePath}" checked="checked" data-role="file-checkbox"></f:then>
-                                        <f:else><input type="checkbox" name="selected_language_files[]" value="{languageFile.relativePath}" data-role="file-checkbox"></f:else>
-                                    </f:if>
-                                    <span class="ppl-et__file-copy">
-                                        <strong><span class="ppl-et__ui-icon ppl-et__ui-icon--file" aria-hidden="true"></span>{languageFile.displayName}</strong>
-                                        <span class="ppl-et__file-meta">
-                                            <span class="ppl-et__language-chip">{languageFile.localeLabel}</span>
-                                            <span>{languageFile.unitCount} <f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.keys" /></span>
+                            <f:for each="{report.fileGroups}" as="fileGroup">
+                                <details class="ppl-et__file-group" data-role="file-group" data-group-key="{fileGroup.groupId}" data-search="{fileGroup.searchText}" open="open">
+                                    <summary class="ppl-et__file-group-summary">
+                                        <f:if condition="{fileGroup.allSelected}">
+                                            <f:then><input type="checkbox" checked="checked" data-role="file-group-checkbox" aria-label="{f:translate(key: 'LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.selectExtensionFiles')}"></f:then>
+                                            <f:else><input type="checkbox" data-role="file-group-checkbox" aria-label="{f:translate(key: 'LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:action.selectExtensionFiles')}"></f:else>
+                                        </f:if>
+                                        <span class="ppl-et__file-group-copy">
+                                            <strong>{fileGroup.displayName}</strong>
+                                            <span class="ppl-et__file-group-meta">
+                                                <code>{fileGroup.extensionKey}</code>
+                                                <span><span data-role="file-group-selected-count">{fileGroup.selectedCount}</span>/{fileGroup.fileCount} <f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:summary.xlfFiles" /></span>
+                                                <span>{fileGroup.unitCount} <f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.keys" /></span>
+                                            </span>
                                         </span>
-                                    </span>
-                                </label>
+                                        <span class="ppl-et__file-group-caret" aria-hidden="true"></span>
+                                    </summary>
+                                    <div class="ppl-et__file-group-items" data-role="file-group-items">
+                                        <f:for each="{fileGroup.files}" as="languageFile">
+                                            <label class="ppl-et__file-item" data-role="file-item" data-search="{languageFile.searchText}">
+                                                <f:if condition="{languageFile.selected}">
+                                                    <f:then><input type="checkbox" name="selected_language_files[]" value="{languageFile.relativePath}" checked="checked" data-role="file-checkbox"></f:then>
+                                                    <f:else><input type="checkbox" name="selected_language_files[]" value="{languageFile.relativePath}" data-role="file-checkbox"></f:else>
+                                                </f:if>
+                                                <span class="ppl-et__file-copy">
+                                                    <strong><span class="ppl-et__ui-icon ppl-et__ui-icon--file" aria-hidden="true"></span>{languageFile.shortRelativePath}</strong>
+                                                    <span class="ppl-et__file-meta">
+                                                        <span class="ppl-et__language-chip">{languageFile.localeLabel}</span>
+                                                        <span class="ppl-et__file-kind"><f:translate key="{languageFile.fileKindLabelKey}" extensionName="PplDeeplV3ExtensionTranslator" /></span>
+                                                        <span>{languageFile.unitCount} <f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:label.keys" /></span>
+                                                    </span>
+                                                </span>
+                                            </label>
+                                        </f:for>
+                                    </div>
+                                </details>
                             </f:for>
                         </div>
                     </section>
@@ -194,6 +216,14 @@
                         <div class="ppl-et__section-head">
                             <h2><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:section.problemRows" /></h2>
                         </div>
+                        <f:if condition="{report.filteredFindingsLimited}">
+                            <div class="ppl-et__table-limit">
+                                <f:translate
+                                    key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:message.findingsLimited"
+                                    arguments="{0: report.filteredFindingsRendered, 1: report.filteredFindingsTotal}"
+                                />
+                            </div>
+                        </f:if>
                         <div class="ppl-et__table-toolbar">
                             <label class="ppl-et__sr-only" for="ppl-et-finding-search"><f:translate key="LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:placeholder.findingSearch" /></label>
                             <input id="ppl-et-finding-search" class="form-control" type="search" placeholder="{f:translate(key: 'LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:placeholder.findingSearchRich')}" data-role="finding-search">
@@ -226,7 +256,7 @@
                                 </thead>
                                 <tbody>
                                     <f:for each="{report.filteredFindings}" as="finding">
-                                        <tr data-role="finding-row" data-search="{finding.searchText}" data-locale="{finding.displayLocale}" data-state="{finding.filterState}" data-needs-source="{finding.needsSource}">
+                                        <tr data-role="finding-row" data-search="{finding.searchText}" data-locale="{finding.displayLocale}" data-state="{finding.filterState}" data-language-file="{finding.languageFile}" data-needs-source="{finding.needsSource}">
                                             <td>
                                                 <f:if condition="{finding.selected}">
                                                     <f:then><input type="checkbox" name="selected_findings[]" value="{finding.id}" checked="checked" data-role="finding-checkbox" data-issue-type="{finding.issueType}"></f:then>

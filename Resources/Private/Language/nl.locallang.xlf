@@ -393,6 +393,10 @@
                 <source>Selected only</source>
                 <target>Alleen geselecteerd</target>
             </trans-unit>
+            <trans-unit id="action.selectExtensionFiles">
+                <source>Select extension files</source>
+                <target>Extensiebestanden selecteren</target>
+            </trans-unit>
             <trans-unit id="action.selectVisible">
                 <source>Select visible</source>
                 <target>Selecteer zichtbaar</target>
@@ -437,6 +441,18 @@
                 <source>keys</source>
                 <target>sleutels</target>
             </trans-unit>
+            <trans-unit id="label.fileKind.main">
+                <source>Main labels</source>
+                <target>Main labels</target>
+            </trans-unit>
+            <trans-unit id="label.fileKind.module">
+                <source>Backend module</source>
+                <target>Backend module</target>
+            </trans-unit>
+            <trans-unit id="label.fileKind.database">
+                <source>Database labels</source>
+                <target>Database labels</target>
+            </trans-unit>
             <trans-unit id="placeholder.findingSearchRich">
                 <source>Search by text, key, or file</source>
                 <target>Zoek op tekst, sleutel of bestand</target>
@@ -452,6 +468,10 @@
             <trans-unit id="message.deleteBlacklisting">
                 <source>Select entries in the list and delete the blacklisting to restore the default scanner result.</source>
                 <target>Selecteer vermeldingen in de lijst en verwijder de zwarte lijst om het standaardscannerresultaat te herstellen.</target>
+            </trans-unit>
+            <trans-unit id="message.findingsLimited">
+                <source>Showing %1$s of %2$s rows. Narrow the scan path or choose a specific issue tab to keep the workspace responsive.</source>
+                <target>Showing %1$s of %2$s rows. Narrow the scan path or choose a specific issue tab to keep the workspace responsive.</target>
             </trans-unit>
             <trans-unit id="extconf.allowProductionWrites">
                 <source>Allow production writes. Keep disabled unless this instance may write XLF files in production. Write actions are protected by backend permissions and form tokens.</source>

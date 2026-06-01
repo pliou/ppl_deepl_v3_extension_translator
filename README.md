@@ -1,6 +1,6 @@
 # PPL DeepL V3 Extension Translator
 
-TYPO3 12.4 backend module for auditing extension XLF files and writing selected translation fixes.
+TYPO3 14 backend module for auditing extension XLF files and writing selected translation fixes.
 
 The module is audit-first:
 
@@ -13,6 +13,17 @@ The module is audit-first:
 - blocks production writes unless explicitly enabled in extension configuration
 - blocks vendor writes unconditionally
 - uses `ppl_deepl_v3_requests` as the only DeepL request layer
+
+## Related DeepL V3 Packages
+
+The DeepL V3 line is split into focused TYPO3 extensions:
+
+- `ppl/ppl-deepl-v3-requests` (`ppl_deepl_v3_requests`): shared request and configuration layer. It owns the DeepL API key lookup, endpoint selection, HTTP calls, language/glossary/style-rule fetches, custom instructions and shared approval storage.
+- `ppl/ppl-deepl-v3-translate` (`ppl_deepl_v3_translate`): frontend content elements and backend modules for interactive text and file translation.
+- `ppl/ppl-deepl-v3-batch-translation` (`ppl_deepl_v3_batch_translation`): backend workspace for translating TYPO3 page trees, pages and content elements with preflight review and controlled record writes.
+- `ppl/ppl-deepl-v3-extension-translator` (`ppl_deepl_v3_extension_translator`): this package. It scans extension XLF files and code usage, classifies findings and writes selected translation fixes with backups.
+
+Extension Translator uses `ppl_deepl_v3_requests` for DeepL suggestions when a reliable source text exists. It does not own API key handling or shared language/glossary/style-rule approval storage.
 
 Current issue types:
 
