@@ -144,7 +144,7 @@ final class XlfLanguageFileReader
 
     private function isSupportedFileName(string $fileName): bool
     {
-        return preg_match('#^(?:[a-z]{2}(?:[-_][A-Za-z0-9]+)?\.)?locallang(?:_(?:db|mod))?\.xlf$#i', $fileName) === 1;
+        return preg_match('#^(?!\.)(?:[A-Za-z0-9_-]+\.)*[A-Za-z0-9_-]+\.xlf$#', $fileName) === 1;
     }
 
     /**
@@ -190,7 +190,11 @@ final class XlfLanguageFileReader
 
     private function localeFromFilename(string $fileName): string
     {
-        if (preg_match('#^([a-z]{2}(?:[-_][A-Za-z0-9]+)?)\.locallang#i', $fileName, $match) === 1) {
+        if (preg_match('#\.([a-z]{2}(?:[-_][A-Za-z0-9]+)?)\.xlf$#i', $fileName, $match) === 1) {
+            return str_replace('_', '-', strtolower($match[1]));
+        }
+
+        if (preg_match('#^([a-z]{2}(?:[-_][A-Za-z0-9]+)?)\.[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.xlf$#i', $fileName, $match) === 1) {
             return str_replace('_', '-', strtolower($match[1]));
         }
 
@@ -199,7 +203,15 @@ final class XlfLanguageFileReader
 
     private function baseNameFromFilename(string $fileName): string
     {
-        return preg_replace('#^[a-z]{2}(?:[-_][A-Za-z0-9]+)?\.#i', '', $fileName) ?: $fileName;
+        if (preg_match('#\.([a-z]{2}(?:[-_][A-Za-z0-9]+)?)\.xlf$#i', $fileName) === 1) {
+            return preg_replace('#\.([a-z]{2}(?:[-_][A-Za-z0-9]+)?)\.xlf$#i', '.xlf', $fileName) ?: $fileName;
+        }
+
+        if (preg_match('#^[a-z]{2}(?:[-_][A-Za-z0-9]+)?\.([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*\.xlf)$#i', $fileName, $match) === 1) {
+            return $match[1];
+        }
+
+        return $fileName;
     }
 
     private function isUsableTransUnitId(string $id): bool

@@ -14,6 +14,7 @@ use Ppl\PplDeeplV3Requests\Service\DeeplConfigurationService;
 final class ExtensionTranslatorWorkflowService
 {
     private const PERMANENT_IGNORE_TAB = 'permanent_ignores';
+    private const MAX_RENDERED_FINDINGS = 500;
 
     public function __construct(
         private readonly ExtensionPathResolver $pathResolver,
@@ -302,12 +303,14 @@ final class ExtensionTranslatorWorkflowService
                 $file['shortRelativePath'] = $this->shortLanguageFilePath((string)$file['relativePath']);
                 $file['displayName'] = $extensionMetadata['displayName'];
                 $file['localeLabel'] = $this->languageFileLocaleLabel($file);
+                $file['fileKindLabelKey'] = $this->languageFileKindLabelKey((string)$file['baseName']);
                 $file['statusSummary'] = $this->languageFileStatusSummary((string)$file['relativePath'], $findings);
                 $file['searchText'] = mb_strtolower(implode(' ', [
                     $file['extensionKey'],
                     $file['displayName'],
                     $file['relativePath'],
                     $file['localeLabel'],
+                    $file['baseName'],
                     $file['statusSummary'],
                 ]));
 
@@ -315,6 +318,7 @@ final class ExtensionTranslatorWorkflowService
             },
             $reportArray['languageFiles']
         );
+        $reportArray['fileGroups'] = $this->languageFileGroups($reportArray['languageFiles']);
 
         if ($activeTab === self::PERMANENT_IGNORE_TAB) {
             $findings = [];
@@ -324,6 +328,14 @@ final class ExtensionTranslatorWorkflowService
                 static fn(TranslationFinding $finding): bool => $finding->issueType === $activeTab
             ));
         }
+
+        $filteredFindingsTotal = count($findings);
+        if ($filteredFindingsTotal > self::MAX_RENDERED_FINDINGS) {
+            $findings = array_slice($findings, 0, self::MAX_RENDERED_FINDINGS);
+        }
+        $reportArray['filteredFindingsTotal'] = $filteredFindingsTotal;
+        $reportArray['filteredFindingsRendered'] = count($findings);
+        $reportArray['filteredFindingsLimited'] = $filteredFindingsTotal > count($findings);
 
         $reportArray['filteredFindings'] = array_map(
             function (TranslationFinding $finding) use ($selectedLookup, $translatedLookup, $report): array {
@@ -363,6 +375,62 @@ final class ExtensionTranslatorWorkflowService
         );
 
         return $reportArray;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $languageFiles
+     * @return array<int, array<string, mixed>>
+     */
+    private function languageFileGroups(array $languageFiles): array
+    {
+        $groups = [];
+        foreach ($languageFiles as $file) {
+            $extensionKey = trim((string)($file['extensionKey'] ?? ''));
+            $groupKey = $extensionKey !== '' ? $extensionKey : 'unknown';
+            if (!isset($groups[$groupKey])) {
+                $groups[$groupKey] = [
+                    'groupId' => preg_replace('/[^a-z0-9_-]+/i', '-', $groupKey) ?: 'extension',
+                    'extensionKey' => $groupKey,
+                    'displayName' => (string)($file['displayName'] ?? $groupKey),
+                    'files' => [],
+                    'fileCount' => 0,
+                    'selectedCount' => 0,
+                    'unitCount' => 0,
+                    'searchParts' => [$groupKey, (string)($file['displayName'] ?? '')],
+                ];
+            }
+
+            $groups[$groupKey]['files'][] = $file;
+            $groups[$groupKey]['fileCount']++;
+            $groups[$groupKey]['unitCount'] += (int)($file['unitCount'] ?? 0);
+            if ((bool)($file['selected'] ?? false)) {
+                $groups[$groupKey]['selectedCount']++;
+            }
+        }
+
+        $groups = array_map(
+            static function (array $group): array {
+                $fileCount = (int)$group['fileCount'];
+                $selectedCount = (int)$group['selectedCount'];
+                $group['allSelected'] = $fileCount > 0 && $selectedCount === $fileCount;
+                $group['partiallySelected'] = $selectedCount > 0 && $selectedCount < $fileCount;
+                $group['searchText'] = mb_strtolower(implode(' ', array_unique(array_map('strval', $group['searchParts']))));
+                unset($group['searchParts']);
+
+                return $group;
+            },
+            array_values($groups)
+        );
+
+        usort(
+            $groups,
+            static fn(array $left, array $right): int => strcasecmp(
+                (string)($left['displayName'] ?? $left['extensionKey'] ?? ''),
+                (string)($right['displayName'] ?? $right['extensionKey'] ?? '')
+            )
+        );
+
+        return $groups;
     }
 
     /**
@@ -421,6 +489,15 @@ final class ExtensionTranslatorWorkflowService
         $language = trim($language) !== '' ? trim($language) : '?';
 
         return strtoupper($language);
+    }
+
+    private function languageFileKindLabelKey(string $baseName): string
+    {
+        return match (strtolower(trim($baseName))) {
+            'locallang_mod.xlf' => 'label.fileKind.module',
+            'locallang_db.xlf' => 'label.fileKind.database',
+            default => 'label.fileKind.main',
+        };
     }
 
     /**

@@ -7,7 +7,140 @@
         callback();
     }
 
+    const overflowClampCss = [
+        ':host,',
+        'html,',
+        'body,',
+        'typo3-backend-module-router,',
+        'typo3-iframe-module,',
+        '#typo3-contentIframe,',
+        '.scaffold-content,',
+        '.scaffold-content-module,',
+        '.scaffold-content-module-iframe,',
+        '.t3js-scaffold-content-module-iframe {',
+        '  box-sizing: border-box !important;',
+        '  max-width: 100% !important;',
+        '  min-width: 0 !important;',
+        '  overflow-x: hidden !important;',
+        '}',
+        '#typo3-contentIframe,',
+        '.scaffold-content-module-iframe,',
+        '.t3js-scaffold-content-module-iframe {',
+        '  display: block !important;',
+        '  width: 100% !important;',
+        '}'
+    ].join('\n');
+
+    function injectOverflowClampStyle(root) {
+        if (!root || !root.querySelector) {
+            return;
+        }
+        if (root.querySelector('style[data-ppl-et-overflow-clamp="1"]')) {
+            return;
+        }
+        const styleDocument = root.ownerDocument || document;
+        const style = styleDocument.createElement('style');
+        style.setAttribute('data-ppl-et-overflow-clamp', '1');
+        style.textContent = overflowClampCss;
+        const target = root.head || root;
+        target.appendChild(style);
+    }
+
+    function walkOpenShadowRoots(root, callback) {
+        if (!root || !root.querySelectorAll) {
+            return;
+        }
+        Array.prototype.slice.call(root.querySelectorAll('*')).forEach(function (node) {
+            if (node.shadowRoot) {
+                callback(node.shadowRoot);
+                walkOpenShadowRoots(node.shadowRoot, callback);
+            }
+        });
+    }
+
+    function clampHorizontalOverflow() {
+        const localNodes = [document.documentElement, document.body];
+        localNodes.forEach(function (node) {
+            if (!node || !node.style) {
+                return;
+            }
+            node.style.maxWidth = '100vw';
+            node.style.overflowX = 'hidden';
+        });
+
+        const accessibilityOverlay = document.getElementById('lt-accessibility-devtools');
+        if (accessibilityOverlay) {
+            accessibilityOverlay.style.contain = 'strict';
+            accessibilityOverlay.style.height = '1px';
+            accessibilityOverlay.style.maxHeight = '1px';
+            accessibilityOverlay.style.maxWidth = '1px';
+            accessibilityOverlay.style.overflow = 'hidden';
+            accessibilityOverlay.style.pointerEvents = 'none';
+            accessibilityOverlay.style.position = 'fixed';
+            accessibilityOverlay.style.right = '0';
+            accessibilityOverlay.style.top = '0';
+            accessibilityOverlay.style.width = '1px';
+        }
+
+        try {
+            if (window.frameElement && window.frameElement.style) {
+                window.frameElement.style.maxWidth = '100%';
+                window.frameElement.style.minWidth = '0';
+                window.frameElement.style.overflowX = 'hidden';
+                window.frameElement.style.width = '100%';
+            }
+
+            if (window.parent && window.parent !== window && window.parent.document) {
+                injectOverflowClampStyle(window.parent.document);
+                walkOpenShadowRoots(window.parent.document, injectOverflowClampStyle);
+
+                const parentNodes = [
+                    window.parent.document.documentElement,
+                    window.parent.document.body,
+                    window.frameElement
+                ];
+                parentNodes.forEach(function (node) {
+                    if (!node || !node.style) {
+                        return;
+                    }
+                    node.style.overflowX = 'hidden';
+                    node.style.minWidth = '0';
+                    node.style.maxWidth = '100vw';
+                });
+
+                const clampNode = function (node) {
+                    if (!node || !node.style) {
+                        return;
+                    }
+                    node.style.boxSizing = 'border-box';
+                    node.style.maxWidth = '100%';
+                    node.style.minWidth = '0';
+                    node.style.overflowX = 'hidden';
+                    if (
+                        node.matches
+                        && node.matches('#typo3-contentIframe, .scaffold-content-module-iframe, .t3js-scaffold-content-module-iframe')
+                    ) {
+                        node.style.display = 'block';
+                        node.style.width = '100%';
+                    }
+                };
+                const clampSelector = 'typo3-backend-module-router, typo3-iframe-module, #typo3-contentIframe, .scaffold-content, .scaffold-content-module, .scaffold-content-module-iframe, .t3js-scaffold-content-module-iframe';
+                window.parent.document.querySelectorAll(clampSelector).forEach(clampNode);
+                walkOpenShadowRoots(window.parent.document, function (shadowRoot) {
+                    if (shadowRoot.host) {
+                        clampNode(shadowRoot.host);
+                    }
+                    shadowRoot.querySelectorAll(clampSelector).forEach(clampNode);
+                });
+            }
+        } catch (error) {
+            // Cross-frame access may be blocked by the browser; local overflow rules still apply.
+        }
+    }
+
     function init(root) {
+        clampHorizontalOverflow();
+
         const form = (root || document).querySelector('#pplExtensionTranslatorForm');
         if (!form || form.dataset.pplEtBound === '1') {
             return;
@@ -73,6 +206,14 @@
 
         function fileItems() {
             return Array.prototype.slice.call(form.querySelectorAll('[data-role="file-item"]'));
+        }
+
+        function fileGroups() {
+            return Array.prototype.slice.call(form.querySelectorAll('[data-role="file-group"]'));
+        }
+
+        function fileGroupCheckboxes() {
+            return Array.prototype.slice.call(form.querySelectorAll('[data-role="file-group-checkbox"]'));
         }
 
         function rowIsVisible(row) {
@@ -169,6 +310,10 @@
                 fileListScrollTop: fileListNode ? fileListNode.scrollTop : 0,
                 sidebarScrollTop: sidebarNode ? sidebarNode.scrollTop : 0,
                 fileSearch: fileSearchNode ? fileSearchNode.value : '',
+                fileGroupsOpen: fileGroups().reduce(function (state, group) {
+                    state[group.getAttribute('data-group-key') || ''] = group.open;
+                    return state;
+                }, {}),
                 selectedOnly: !!(selectedOnlyToggle && selectedOnlyToggle.classList.contains('is-active')),
                 windowScrollX: window.scrollX || 0,
                 windowScrollY: window.scrollY || 0
@@ -193,6 +338,15 @@
             const selectedOnlyNode = nextForm.querySelector('[data-role="files-selected-only"]');
             if (selectedOnlyNode && state.selectedOnly) {
                 selectedOnlyNode.classList.add('is-active');
+            }
+
+            if (state.fileGroupsOpen) {
+                nextForm.querySelectorAll('[data-role="file-group"]').forEach(function (group) {
+                    const groupKey = group.getAttribute('data-group-key') || '';
+                    if (Object.prototype.hasOwnProperty.call(state.fileGroupsOpen, groupKey)) {
+                        group.open = !!state.fileGroupsOpen[groupKey];
+                    }
+                });
             }
 
             init(document);
@@ -275,13 +429,93 @@
             const searchNode = form.querySelector('[data-role="file-search"]');
             const search = String(searchNode ? searchNode.value : '').trim().toLowerCase();
             const selectedOnly = !!(selectedOnlyToggle && selectedOnlyToggle.classList.contains('is-active'));
-            fileItems().forEach(function (item) {
-                const checkbox = item.querySelector('[data-role="file-checkbox"]');
-                const matchesSearch = search === '' || String(item.getAttribute('data-search') || '').indexOf(search) > -1;
-                const matchesSelection = !selectedOnly || !!(checkbox && checkbox.checked);
-                item.hidden = !matchesSearch || !matchesSelection;
-            });
+            const groups = fileGroups();
+            if (groups.length > 0) {
+                groups.forEach(function (group) {
+                    const groupMatchesSearch = search === '' || String(group.getAttribute('data-search') || '').indexOf(search) > -1;
+                    let visibleItems = 0;
+                    Array.prototype.slice.call(group.querySelectorAll('[data-role="file-item"]')).forEach(function (item) {
+                        const checkbox = item.querySelector('[data-role="file-checkbox"]');
+                        const matchesSearch = groupMatchesSearch || String(item.getAttribute('data-search') || '').indexOf(search) > -1;
+                        const matchesSelection = !selectedOnly || !!(checkbox && checkbox.checked);
+                        item.hidden = !matchesSearch || !matchesSelection;
+                        if (!item.hidden) {
+                            visibleItems++;
+                        }
+                    });
+                    group.hidden = visibleItems === 0;
+                });
+            } else {
+                fileItems().forEach(function (item) {
+                    const checkbox = item.querySelector('[data-role="file-checkbox"]');
+                    const matchesSearch = search === '' || String(item.getAttribute('data-search') || '').indexOf(search) > -1;
+                    const matchesSelection = !selectedOnly || !!(checkbox && checkbox.checked);
+                    item.hidden = !matchesSearch || !matchesSelection;
+                });
+            }
+            updateFileGroupState();
             updateFileNoneSentinel();
+        }
+
+        function updateFileGroupState() {
+            fileGroups().forEach(function (group) {
+                const checkboxes = Array.prototype.slice.call(group.querySelectorAll('[data-role="file-checkbox"]'));
+                const checked = checkboxes.filter(function (checkbox) {
+                    return checkbox.checked;
+                }).length;
+                const groupCheckbox = group.querySelector('[data-role="file-group-checkbox"]');
+                const selectedCount = group.querySelector('[data-role="file-group-selected-count"]');
+                if (groupCheckbox) {
+                    groupCheckbox.checked = checkboxes.length > 0 && checked === checkboxes.length;
+                    groupCheckbox.indeterminate = checked > 0 && checked < checkboxes.length;
+                }
+                if (selectedCount) {
+                    selectedCount.textContent = String(checked);
+                }
+                group.classList.toggle('is-selected', checkboxes.length > 0 && checked === checkboxes.length);
+                group.classList.toggle('is-partial', checked > 0 && checked < checkboxes.length);
+            });
+        }
+
+        function selectedLanguageFileLookup() {
+            const lookup = {};
+            fileCheckboxes().forEach(function (checkbox) {
+                if (checkbox.checked) {
+                    lookup[checkbox.value] = true;
+                }
+            });
+
+            return lookup;
+        }
+
+        function rowMatchesSelectedFiles(row, selectedFiles) {
+            if (fileCheckboxes().length === 0) {
+                return true;
+            }
+            const selectedFileKeys = Object.keys(selectedFiles);
+            if (selectedFileKeys.length === 0) {
+                return false;
+            }
+
+            return !!selectedFiles[String(row.getAttribute('data-language-file') || '')];
+        }
+
+        function syncRowsAfterFileSelection() {
+            const selectedFiles = selectedLanguageFileLookup();
+            findingRows().forEach(function (row) {
+                if (rowMatchesSelectedFiles(row, selectedFiles)) {
+                    return;
+                }
+                const checkbox = row.querySelector('[data-role="finding-checkbox"]');
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.disabled = false;
+                }
+            });
+            updateLocaleOptions();
+            updateFindingFilters(true);
+            updateSelectedCount();
+            updateIssueTypeGuards();
         }
 
         function updateLocaleOptions() {
@@ -291,7 +525,11 @@
             }
             const previous = localeFilter.value;
             const labels = {};
+            const selectedFiles = selectedLanguageFileLookup();
             findingRows().forEach(function (row) {
+                if (!rowMatchesSelectedFiles(row, selectedFiles)) {
+                    return;
+                }
                 const locale = String(row.getAttribute('data-locale') || '').trim();
                 if (locale !== '') {
                     labels[locale] = true;
@@ -309,7 +547,7 @@
             localeFilter.value = Object.prototype.hasOwnProperty.call(labels, previous) ? previous : '';
         }
 
-        function rowMatchesFilters(row) {
+        function rowMatchesFilters(row, selectedFiles) {
             const searchNode = form.querySelector('[data-role="finding-search"]');
             const localeFilter = form.querySelector('[data-role="locale-filter"]');
             const stateFilter = form.querySelector('[data-role="state-filter"]');
@@ -317,6 +555,9 @@
             const locale = String(localeFilter ? localeFilter.value : '').trim();
             const state = String(stateFilter ? stateFilter.value : '').trim();
             const rowState = String(row.getAttribute('data-state') || '').trim();
+            if (!rowMatchesSelectedFiles(row, selectedFiles)) {
+                return false;
+            }
 
             if (search !== '' && String(row.getAttribute('data-search') || '').indexOf(search) === -1) {
                 return false;
@@ -339,7 +580,10 @@
                 currentPage = 1;
             }
             const rows = findingRows();
-            const matchedRows = rows.filter(rowMatchesFilters);
+            const selectedFiles = selectedLanguageFileLookup();
+            const matchedRows = rows.filter(function (row) {
+                return rowMatchesFilters(row, selectedFiles);
+            });
             const size = pageSize ? Math.max(1, parseInt(pageSize.value || '25', 10)) : matchedRows.length || 1;
             const totalPages = Math.max(1, Math.ceil(matchedRows.length / size));
             currentPage = Math.min(Math.max(1, currentPage), totalPages);
@@ -575,9 +819,25 @@
 
         fileCheckboxes().forEach(function (checkbox) {
             checkbox.addEventListener('change', function () {
-                const uiState = captureUiState();
                 updateFileFilters();
-                queueRefresh(uiState);
+                syncRowsAfterFileSelection();
+            });
+        });
+
+        fileGroupCheckboxes().forEach(function (checkbox) {
+            checkbox.addEventListener('click', function (event) {
+                event.stopPropagation();
+            });
+            checkbox.addEventListener('change', function () {
+                const group = checkbox.closest('[data-role="file-group"]');
+                if (!group) {
+                    return;
+                }
+                Array.prototype.slice.call(group.querySelectorAll('[data-role="file-checkbox"]')).forEach(function (fileCheckbox) {
+                    fileCheckbox.checked = checkbox.checked;
+                });
+                updateFileFilters();
+                syncRowsAfterFileSelection();
             });
         });
 
@@ -589,24 +849,22 @@
         const filesSelectAll = form.querySelector('[data-role="files-select-all"]');
         if (filesSelectAll) {
             filesSelectAll.addEventListener('click', function () {
-                const uiState = captureUiState();
                 fileCheckboxes().forEach(function (checkbox) {
                     checkbox.checked = true;
                 });
                 updateFileFilters();
-                queueRefresh(uiState);
+                syncRowsAfterFileSelection();
             });
         }
 
         const filesDeselectAll = form.querySelector('[data-role="files-deselect-all"]');
         if (filesDeselectAll) {
             filesDeselectAll.addEventListener('click', function () {
-                const uiState = captureUiState();
                 fileCheckboxes().forEach(function (checkbox) {
                     checkbox.checked = false;
                 });
                 updateFileFilters();
-                queueRefresh(uiState);
+                syncRowsAfterFileSelection();
             });
         }
 
@@ -698,5 +956,11 @@
 
     ready(function () {
         init(document);
+        if (!window.pplEtOverflowClampBound) {
+            window.pplEtOverflowClampBound = true;
+            window.addEventListener('resize', clampHorizontalOverflow);
+            window.setTimeout(clampHorizontalOverflow, 250);
+            window.setTimeout(clampHorizontalOverflow, 1000);
+        }
     });
 }());

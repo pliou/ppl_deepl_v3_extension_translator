@@ -132,6 +132,7 @@
             <trans-unit id="issue.unknown"><source>Unknown issue</source></trans-unit>
             <trans-unit id="action.rescan"><source>Rescan</source></trans-unit>
             <trans-unit id="action.selectedOnly"><source>Selected only</source></trans-unit>
+            <trans-unit id="action.selectExtensionFiles"><source>Select extension files</source></trans-unit>
             <trans-unit id="action.selectVisible"><source>Select visible</source></trans-unit>
             <trans-unit id="action.previousPage"><source>Previous page</source></trans-unit>
             <trans-unit id="action.nextPage"><source>Next page</source></trans-unit>
@@ -143,10 +144,14 @@
             <trans-unit id="option.allLocales"><source>All locales</source></trans-unit>
             <trans-unit id="option.allStates"><source>All states</source></trans-unit>
             <trans-unit id="label.keys"><source>keys</source></trans-unit>
+            <trans-unit id="label.fileKind.main"><source>Main labels</source></trans-unit>
+            <trans-unit id="label.fileKind.module"><source>Backend module</source></trans-unit>
+            <trans-unit id="label.fileKind.database"><source>Database labels</source></trans-unit>
             <trans-unit id="placeholder.findingSearchRich"><source>Search by text, key, or file</source></trans-unit>
             <trans-unit id="message.permanentIgnores"><source>These entries are hidden by the permanent ignore list. Delete blacklist entries to show them in scans again.</source></trans-unit>
             <trans-unit id="message.noPermanentIgnores"><source>No permanent ignore entries saved.</source></trans-unit>
             <trans-unit id="message.deleteBlacklisting"><source>Select entries in the list and delete the blacklisting to restore the default scanner result.</source></trans-unit>
+            <trans-unit id="message.findingsLimited"><source>Showing %1$s of %2$s rows. Narrow the scan path or choose a specific issue tab to keep the workspace responsive.</source></trans-unit>
             <trans-unit id="extconf.allowProductionWrites"><source>Allow production writes. Keep disabled unless this instance may write XLF files in production. Write actions are protected by backend permissions and form tokens.</source></trans-unit>
         </body>
     </file>

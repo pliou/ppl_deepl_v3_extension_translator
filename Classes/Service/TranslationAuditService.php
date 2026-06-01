@@ -31,6 +31,7 @@ final class TranslationAuditService
         $allLanguageFiles = $this->xlfReader->findLanguageFiles($scope);
         $languageFiles = $this->selectedLanguageFiles($allLanguageFiles, $selectedLanguageFiles);
         $codeKeys = $this->keyScanner->scan($scope);
+        $codeKeys = $this->filterCodeKeysBySelectedLanguageFiles($codeKeys, $selectedLanguageFiles);
         $hardcodedConfigLabels = $this->keyScanner->scanHardcodedConfigLabels($scope);
         $groups = $this->groupLanguageFiles($languageFiles);
         $sourceIndex = $this->buildSourceTextIndex($languageFiles);
@@ -89,6 +90,60 @@ final class TranslationAuditService
             $languageFiles,
             static fn(XlfTranslationFile $file): bool => isset($lookup[$file->relativePath])
         ));
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $codeKeys
+     * @param string[] $selectedLanguageFiles
+     * @return array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}>
+     */
+    private function filterCodeKeysBySelectedLanguageFiles(array $codeKeys, array $selectedLanguageFiles): array
+    {
+        if ($selectedLanguageFiles === [] || in_array('__none__', $selectedLanguageFiles, true)) {
+            return $codeKeys;
+        }
+
+        $extensionPrefixes = $this->extensionPrefixesFromSelectedLanguageFiles($selectedLanguageFiles);
+        if ($extensionPrefixes === []) {
+            return $codeKeys;
+        }
+
+        return array_filter(
+            $codeKeys,
+            static function (array $data) use ($extensionPrefixes): bool {
+                foreach (array_merge($data['sourceFiles'], $data['languageFiles']) as $path) {
+                    $path = trim(str_replace('\\', '/', $path), '/');
+                    foreach ($extensionPrefixes as $extensionPrefix) {
+                        if ($path === $extensionPrefix || str_starts_with($path, $extensionPrefix . '/')) {
+                            return true;
+                        }
+                    }
+                }
+
+                return false;
+            }
+        );
+    }
+
+    /**
+     * @param string[] $selectedLanguageFiles
+     * @return string[]
+     */
+    private function extensionPrefixesFromSelectedLanguageFiles(array $selectedLanguageFiles): array
+    {
+        $prefixes = [];
+
+        foreach ($selectedLanguageFiles as $selectedLanguageFile) {
+            $selectedLanguageFile = trim(str_replace('\\', '/', $selectedLanguageFile), '/');
+            $languageRootPosition = strpos($selectedLanguageFile, '/Resources/Private/Language/');
+            if ($languageRootPosition === false || $languageRootPosition === 0) {
+                continue;
+            }
+
+            $prefixes[] = substr($selectedLanguageFile, 0, $languageRootPosition);
+        }
+
+        return array_values(array_unique($prefixes));
     }
 
     /**
@@ -176,7 +231,7 @@ final class TranslationAuditService
     private function addMissingSourceFindings(array &$findings, ScanScope $scope, array $languageFiles, array $groups, array $codeKeys, array $sourceIndex): void
     {
         foreach ($codeKeys as $key => $data) {
-            $candidateFiles = $this->sourceFilesForCodeKey($languageFiles, $groups, $data['languageFiles'], $data['sourceFiles']);
+            $candidateFiles = $this->sourceFilesForCodeKey($languageFiles, $groups, $data['languageFiles'], $data['sourceFiles'], $key);
             foreach ($candidateFiles as $file) {
                 $defaultValue = trim((string)($data['defaultValue'] ?? ''));
                 $existingUnit = $file->getUnit($key);
@@ -431,7 +486,8 @@ final class TranslationAuditService
                 $languageFiles,
                 $groups,
                 [(string)$label['languageFile']],
-                $sourceFiles
+                $sourceFiles,
+                $key
             );
 
             foreach ($candidateFiles as $file) {
@@ -717,7 +773,7 @@ final class TranslationAuditService
      * @param string[] $sourceFiles
      * @return XlfTranslationFile[]
      */
-    private function sourceFilesForCodeKey(array $languageFiles, array $groups, array $languageFileHints, array $sourceFiles): array
+    private function sourceFilesForCodeKey(array $languageFiles, array $groups, array $languageFileHints, array $sourceFiles, string $key): array
     {
         $matches = [];
 
@@ -737,12 +793,30 @@ final class TranslationAuditService
             return array_values($matches);
         }
 
+        if ($languageFileHints !== []) {
+            return [];
+        }
+
         $sourceRoot = $this->firstPathSegmentFromSourceFiles($sourceFiles);
         if ($sourceRoot !== '') {
             foreach ($groups as $group) {
                 if (
                     $group['source'] instanceof XlfTranslationFile
-                    && str_starts_with($group['source']->relativePath, $sourceRoot . '/')
+                    && $this->languageFileMatchesSourceRoot($group['source'], $sourceRoot)
+                    && $group['source']->getUnit($key) instanceof XlfTransUnit
+                ) {
+                    $matches[$group['source']->relativePath] = $group['source'];
+                }
+            }
+
+            if ($matches !== []) {
+                return array_values($matches);
+            }
+
+            foreach ($groups as $group) {
+                if (
+                    $group['source'] instanceof XlfTranslationFile
+                    && $this->languageFileMatchesSourceRoot($group['source'], $sourceRoot)
                     && $group['source']->fileName === 'locallang.xlf'
                 ) {
                     return [$group['source']];
@@ -750,7 +824,7 @@ final class TranslationAuditService
             }
 
             foreach ($groups as $group) {
-                if ($group['source'] instanceof XlfTranslationFile && str_starts_with($group['source']->relativePath, $sourceRoot . '/')) {
+                if ($group['source'] instanceof XlfTranslationFile && $this->languageFileMatchesSourceRoot($group['source'], $sourceRoot)) {
                     return [$group['source']];
                 }
             }
@@ -769,6 +843,23 @@ final class TranslationAuditService
         }
 
         return [];
+    }
+
+    private function languageFileMatchesSourceRoot(XlfTranslationFile $file, string $sourceRoot): bool
+    {
+        if ($sourceRoot === '') {
+            return true;
+        }
+
+        if (in_array($sourceRoot, ['Build', 'Classes', 'Configuration', 'Documentation', 'Resources', 'Tests'], true)) {
+            return true;
+        }
+
+        if (str_contains($sourceRoot, '.')) {
+            return true;
+        }
+
+        return str_starts_with($file->relativePath, $sourceRoot . '/');
     }
 
     private function languageFileGroupKey(XlfTranslationFile $file): string
