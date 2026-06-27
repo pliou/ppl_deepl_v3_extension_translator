@@ -1,0 +1,2 @@
+# cat=basic//; type=boolean; label=LLL:EXT:ppl_deepl_v3_extension_translator/Resources/Private/Language/locallang.xlf:extconf.allowProductionWrites
+allowProductionWrites = 0
