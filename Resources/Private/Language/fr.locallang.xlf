@@ -475,7 +475,7 @@
             </trans-unit>
             <trans-unit id="extconf.allowProductionWrites">
                 <source>Allow production writes. Keep disabled unless this instance may write XLF files in production. Write actions are protected by backend permissions and form tokens.</source>
-                <target>Autoriser les ?critures en production. Gardez cette option d?sactiv?e sauf si cette instance peut ?crire des fichiers XLF en production. Les actions d'?criture sont prot?g?es par les autorisations backend et les jetons de formulaire.</target>
+                <target>Autoriser les écritures en production. Gardez cette option désactivée sauf si cette instance peut écrire des fichiers XLF en production. Les actions d'écriture sont protégées par les autorisations backend et les jetons de formulaire.</target>
             </trans-unit>
         </body>
     </file>

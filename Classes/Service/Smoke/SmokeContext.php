@@ -12,7 +12,14 @@ final class SmokeContext
 
     public function isActive(): bool
     {
-        return $this->envEnabled() || $this->readContext() !== [];
+        $active = $this->envEnabled() || $this->readContext() !== [];
+        if (!$active) {
+            return false;
+        }
+
+        $this->assertSmokeAllowed();
+
+        return true;
     }
 
     public function artifactRoot(): string
@@ -33,6 +40,8 @@ final class SmokeContext
 
     public function activate(string $artifactRoot): void
     {
+        $this->assertSmokeAllowed();
+
         $path = $this->contextFilePath();
         $directory = dirname($path);
         if (!is_dir($directory)) {
@@ -62,6 +71,19 @@ final class SmokeContext
     private function envEnabled(): bool
     {
         return in_array(strtolower(trim((string)getenv('PPL_EXTENSION_TRANSLATOR_SMOKE'))), ['1', 'true', 'yes'], true);
+    }
+
+    private function assertSmokeAllowed(): void
+    {
+        $context = Environment::getContext();
+        if ($context->isDevelopment() || $context->isTesting()) {
+            return;
+        }
+
+        throw new \RuntimeException(
+            'Extension Translator Fake DeepL smoke context is only allowed in TYPO3 Development or Testing context.',
+            1771334001
+        );
     }
 
     /**

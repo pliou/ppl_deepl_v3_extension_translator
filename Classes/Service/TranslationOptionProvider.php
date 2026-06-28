@@ -4,13 +4,17 @@ declare(strict_types=1);
 
 namespace Ppl\PplDeeplV3ExtensionTranslator\Service;
 
-use TYPO3\CMS\Core\Utility\GeneralUtility;
+use Ppl\PplDeeplV3Requests\Service\DeeplGlossaryConfigurationService;
+use Ppl\PplDeeplV3Requests\Service\DeeplLanguageConfigurationService;
+use Ppl\PplDeeplV3Requests\Service\DeeplStyleRuleConfigurationService;
 
 final class TranslationOptionProvider
 {
-    private const LANGUAGE_SERVICE = 'Ppl\\PplDeeplV3Translate\\Service\\DeeplLanguageService';
-    private const GLOSSARY_SERVICE = 'Ppl\\PplDeeplV3Translate\\Service\\DeeplGlossaryService';
-    private const STYLE_RULE_SERVICE = 'Ppl\\PplDeeplV3Translate\\Service\\DeeplStyleRuleService';
+    public function __construct(
+        private readonly DeeplLanguageConfigurationService $languageConfigurationService,
+        private readonly DeeplGlossaryConfigurationService $glossaryConfigurationService,
+        private readonly DeeplStyleRuleConfigurationService $styleRuleConfigurationService
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -24,45 +28,42 @@ final class TranslationOptionProvider
         $glossaryOptionsByCombination = [];
         $styleRuleOptionsByLanguage = [];
 
-        if (class_exists(self::LANGUAGE_SERVICE)) {
-            try {
-                $languageService = GeneralUtility::makeInstance(self::LANGUAGE_SERVICE);
-                $sourceLanguages = $this->normalizeOptions((array)$languageService->getSourceLanguages(), $sourceLanguages);
-                $targetLanguages = $this->normalizeOptions((array)$languageService->getTargetLanguages(), $targetLanguages);
-            } catch (\Throwable) {
-                // Keep safe fallback options when the optional V3 Translate configuration is unavailable.
-            }
+        try {
+            $sourceLanguages = $this->normalizeOptions(
+                $this->languageConfigurationService->getEnabledSourceLanguages(),
+                $sourceLanguages
+            );
+            $targetLanguages = $this->normalizeOptions(
+                $this->languageConfigurationService->getEnabledTargetLanguages(),
+                $targetLanguages
+            );
+        } catch (\Throwable) {
+            // Keep safe fallback options when the shared V3 request configuration is unavailable.
         }
 
-        if (class_exists(self::GLOSSARY_SERVICE)) {
-            try {
-                $glossaryService = GeneralUtility::makeInstance(self::GLOSSARY_SERVICE);
-                $glossaryOptionsByCombination = (array)$glossaryService->getGlossaryOptionsByCombination();
-            } catch (\Throwable) {
-                $glossaryOptionsByCombination = [];
-            }
+        try {
+            $glossaryOptionsByCombination = $this->glossaryConfigurationService->getGlossaryOptionsByCombination();
+        } catch (\Throwable) {
+            $glossaryOptionsByCombination = [];
         }
 
-        if (class_exists(self::STYLE_RULE_SERVICE)) {
-            try {
-                $styleRuleService = GeneralUtility::makeInstance(self::STYLE_RULE_SERVICE);
-                $styleRuleOptionsByLanguage = (array)$styleRuleService->getStyleRuleOptionsByLanguage();
-            } catch (\Throwable) {
-                $styleRuleOptionsByLanguage = [];
-            }
+        try {
+            $styleRuleOptionsByLanguage = $this->styleRuleConfigurationService->getStyleRuleOptionsByLanguage();
+        } catch (\Throwable) {
+            $styleRuleOptionsByLanguage = [];
         }
 
         $effectiveTargetLanguage = $targetLanguage !== '' ? $targetLanguage : 'DE';
-        $currentGlossaryKey = $this->normalizeGlossaryLanguage($sourceLanguage) . ':' . $this->normalizeGlossaryLanguage($effectiveTargetLanguage);
-        $currentStyleLanguage = $this->normalizeStyleRuleLanguage($effectiveTargetLanguage);
+        $currentGlossaryKey = $this->languageConfigurationService->buildGlossaryCombinationKey($sourceLanguage, $effectiveTargetLanguage);
+        $currentStyleLanguage = $this->languageConfigurationService->normalizeStyleRuleLanguage($effectiveTargetLanguage);
 
         return [
             'sourceLanguages' => $sourceLanguages,
             'targetLanguages' => $targetLanguages,
             'glossaryOptions' => $glossaryOptionsByCombination[$currentGlossaryKey] ?? [],
             'styleRuleOptions' => $styleRuleOptionsByLanguage[$currentStyleLanguage] ?? [],
-            'glossaryOptionsByCombinationJson' => json_encode((object)$glossaryOptionsByCombination, JSON_THROW_ON_ERROR),
-            'styleRuleOptionsByLanguageJson' => json_encode((object)$styleRuleOptionsByLanguage, JSON_THROW_ON_ERROR),
+            'glossaryOptionsByCombinationJson' => $this->jsonForHtml((object)$glossaryOptionsByCombination),
+            'styleRuleOptionsByLanguageJson' => $this->jsonForHtml((object)$styleRuleOptionsByLanguage),
             'tagHandlingOptions' => [
                 'html' => 'HTML',
                 'xml' => 'XML',
@@ -122,35 +123,16 @@ final class TranslationOptionProvider
         ];
     }
 
-    private function normalizeGlossaryLanguage(string $language): string
+    private function jsonForHtml(mixed $value): string
     {
-        $language = strtoupper(str_replace('_', '-', trim($language)));
-
-        return match (true) {
-            $language === 'DE-DE' => 'DE',
-            str_starts_with($language, 'EN-') => 'EN',
-            str_starts_with($language, 'PT-') => 'PT',
-            str_starts_with($language, 'ES-') => 'ES',
-            $language === 'ZH-HANS' || $language === 'ZH-HANT' => 'ZH',
-            str_contains($language, '-') => explode('-', $language, 2)[0],
-            default => $language,
-        };
-    }
-
-    private function normalizeStyleRuleLanguage(string $language): string
-    {
-        $language = strtoupper(str_replace('_', '-', trim($language)));
-
-        return match (true) {
-            str_starts_with($language, 'EN') => 'EN',
-            $language === 'DE' || $language === 'DE-DE' => 'DE',
-            str_starts_with($language, 'ES') => 'ES',
-            str_starts_with($language, 'FR') => 'FR',
-            str_starts_with($language, 'IT') => 'IT',
-            str_starts_with($language, 'JA') => 'JA',
-            str_starts_with($language, 'KO') => 'KO',
-            str_starts_with($language, 'ZH') => 'ZH',
-            default => '',
-        };
+        return json_encode(
+            $value,
+            JSON_THROW_ON_ERROR
+            | JSON_HEX_TAG
+            | JSON_HEX_AMP
+            | JSON_HEX_APOS
+            | JSON_HEX_QUOT
+            | JSON_UNESCAPED_SLASHES
+        );
     }
 }

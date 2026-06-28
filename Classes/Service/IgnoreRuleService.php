@@ -6,6 +6,9 @@ namespace Ppl\PplDeeplV3ExtensionTranslator\Service;
 
 use Ppl\PplDeeplV3ExtensionTranslator\Domain\Dto\TranslationFinding;
 use TYPO3\CMS\Core\Core\Environment;
+use TYPO3\CMS\Core\Locking\LockFactory;
+use TYPO3\CMS\Core\Locking\LockingStrategyInterface;
+use TYPO3\CMS\Core\Utility\GeneralUtility;
 
 final class IgnoreRuleService
 {
@@ -27,23 +30,30 @@ final class IgnoreRuleService
 
     public function addRule(TranslationFinding $finding, string $ruleType, string $note = ''): void
     {
-        $rules = $this->readRules();
-        $rule = [
-            'ruleType' => $ruleType,
-            'issueType' => $finding->baseIssueType !== '' ? $finding->baseIssueType : $finding->issueType,
-            'effectiveIssueType' => $finding->issueType,
-            'extensionKey' => $finding->extensionKey,
-            'languageFile' => $finding->languageFile,
-            'locale' => $finding->locale,
-            'key' => $finding->transUnitId,
-            'sourceValueHash' => sha1(trim($finding->sourceValue)),
-            'note' => $note,
-            'createdAt' => date(DATE_ATOM),
-        ];
-        $rule['id'] = $this->ruleId($rule);
-        $rules[] = $rule;
+        // Lock the whole read-modify-write so two concurrent rule additions cannot each read the old
+        // set and overwrite one another (lost update).
+        $lock = $this->acquireWriteLock();
+        try {
+            $rules = $this->readRules();
+            $rule = [
+                'ruleType' => $ruleType,
+                'issueType' => $finding->baseIssueType !== '' ? $finding->baseIssueType : $finding->issueType,
+                'effectiveIssueType' => $finding->issueType,
+                'extensionKey' => $finding->extensionKey,
+                'languageFile' => $finding->languageFile,
+                'locale' => $finding->locale,
+                'key' => $finding->transUnitId,
+                'sourceValueHash' => sha1(trim($finding->sourceValue)),
+                'note' => $note,
+                'createdAt' => date(DATE_ATOM),
+            ];
+            $rule['id'] = $this->ruleId($rule);
+            $rules[] = $rule;
 
-        $this->writeRules($this->deduplicateRules($rules));
+            $this->writeRules($this->deduplicateRules($rules));
+        } finally {
+            $this->releaseWriteLock($lock);
+        }
     }
 
     /**
@@ -114,22 +124,27 @@ final class IgnoreRuleService
             return 0;
         }
 
-        $rules = $this->readRules();
-        $remaining = [];
-        $deleted = 0;
-        foreach ($rules as $rule) {
-            if (isset($lookup[$this->ruleId($rule)])) {
-                $deleted++;
-                continue;
+        $lock = $this->acquireWriteLock();
+        try {
+            $rules = $this->readRules();
+            $remaining = [];
+            $deleted = 0;
+            foreach ($rules as $rule) {
+                if (isset($lookup[$this->ruleId($rule)])) {
+                    $deleted++;
+                    continue;
+                }
+                $remaining[] = $rule;
             }
-            $remaining[] = $rule;
-        }
 
-        if ($deleted > 0) {
-            $this->writeRules($remaining);
-        }
+            if ($deleted > 0) {
+                $this->writeRules($remaining);
+            }
 
-        return $deleted;
+            return $deleted;
+        } finally {
+            $this->releaseWriteLock($lock);
+        }
     }
 
     /**
@@ -213,11 +228,44 @@ final class IgnoreRuleService
     {
         $path = $this->ruleFilePath();
         $directory = dirname($path);
-        if (!is_dir($directory)) {
-            mkdir($directory, 0775, true);
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new \RuntimeException('Could not create the ignore-rules directory.');
         }
 
-        file_put_contents($path, json_encode($rules, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+        // Atomic write: a temp file + rename so a crash/concurrent read never sees a truncated JSON.
+        $json = json_encode($rules, JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+        $temp = $path . '.' . bin2hex(random_bytes(6)) . '.tmp';
+        if (file_put_contents($temp, $json) === false) {
+            throw new \RuntimeException('Could not write the ignore-rules temporary file.');
+        }
+        if (!@rename($temp, $path)) {
+            @unlink($temp);
+            throw new \RuntimeException('Could not move the ignore-rules file into place.');
+        }
+    }
+
+    private function acquireWriteLock(): ?LockingStrategyInterface
+    {
+        try {
+            $lock = GeneralUtility::makeInstance(LockFactory::class)->createLocker('ppl_et_ignore_rules');
+            $lock->acquire(LockingStrategyInterface::LOCK_CAPABILITY_EXCLUSIVE);
+
+            return $lock;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function releaseWriteLock(?LockingStrategyInterface $lock): void
+    {
+        if (!$lock instanceof LockingStrategyInterface) {
+            return;
+        }
+        try {
+            $lock->release();
+        } catch (\Throwable) {
+            // Best effort; the lock is also released when the process ends.
+        }
     }
 
     private function ruleFilePath(): string

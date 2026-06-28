@@ -41,6 +41,12 @@ final class SmokeCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        if (!$this->canRunInCurrentContext()) {
+            $output->writeln('<error>Extension Translator smoke fixtures are only allowed in TYPO3 Development or Testing context.</error>');
+
+            return Command::FAILURE;
+        }
+
         if ((bool)$input->getOption('deactivate-fake')) {
             $this->context->deactivate();
             $output->writeln('<info>Extension Translator Fake DeepL context deactivated.</info>');
@@ -100,5 +106,12 @@ final class SmokeCommand extends Command
                 $this->context->deactivate();
             }
         }
+    }
+
+    private function canRunInCurrentContext(): bool
+    {
+        $context = Environment::getContext();
+
+        return $context->isDevelopment() || $context->isTesting();
     }
 }

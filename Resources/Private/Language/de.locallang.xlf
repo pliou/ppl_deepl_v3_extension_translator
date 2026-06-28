@@ -154,7 +154,7 @@
             <trans-unit id="message.findingsLimited"><source>Showing %1$s of %2$s rows. Narrow the scan path or choose a specific issue tab to keep the workspace responsive.</source><target>%1$s von %2$s Zeilen werden angezeigt. Grenze den Scanpfad ein oder waehle einen konkreten Issue-Tab, damit der Arbeitsbereich reaktionsschnell bleibt.</target></trans-unit>
             <trans-unit id="extconf.allowProductionWrites">
                 <source>Allow production writes. Keep disabled unless this instance may write XLF files in production. Write actions are protected by backend permissions and form tokens.</source>
-                <target>Produktions-Schreibzugriffe erlauben. Deaktiviert lassen, au?er diese Instanz darf XLF-Dateien in Produktion schreiben. Schreibaktionen sind durch Backend-Berechtigungen und Formular-Tokens gesch?tzt.</target>
+                <target>Produktions-Schreibzugriffe erlauben. Deaktiviert lassen, außer diese Instanz darf XLF-Dateien in Produktion schreiben. Schreibaktionen sind durch Backend-Berechtigungen und Formular-Tokens geschützt.</target>
             </trans-unit>
         </body>
     </file>

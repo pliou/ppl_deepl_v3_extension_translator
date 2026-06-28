@@ -57,15 +57,25 @@ final class TranslationWriteService
         }
 
         $errors = $this->writer->applyOperations($preview->operations);
-        $files = [];
+        if ($errors !== []) {
+            // applyOperations() is all-or-nothing: any failure rolls back every file it already wrote,
+            // so a non-empty error list means NOTHING was persisted. Report zero written rows/files
+            // instead of "operations minus errors", which previously claimed a phantom partial success.
+            return [
+                'errors' => array_merge($preview->errors, $errors),
+                'writtenRows' => 0,
+                'affectedFiles' => 0,
+            ];
+        }
 
+        $files = [];
         foreach ($preview->operations as $operation) {
             $files[$operation->languageFile] = true;
         }
 
         return [
-            'errors' => array_merge($preview->errors, $errors),
-            'writtenRows' => count($preview->operations) - count($errors),
+            'errors' => $preview->errors,
+            'writtenRows' => count($preview->operations),
             'affectedFiles' => count($files),
         ];
     }

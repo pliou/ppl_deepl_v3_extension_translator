@@ -7,11 +7,15 @@ namespace Ppl\PplDeeplV3ExtensionTranslator\Service;
 use Ppl\PplDeeplV3ExtensionTranslator\Domain\Dto\TranslationBatchRequest;
 use Ppl\PplDeeplV3ExtensionTranslator\Domain\Dto\TranslationFinding;
 use Ppl\PplDeeplV3ExtensionTranslator\Domain\Issue\SourceStatus;
+use Ppl\PplDeeplV3Requests\Domain\Dto\DeepLRequestContext;
+use Ppl\PplDeeplV3Requests\Domain\Dto\RetryPolicy;
+use Ppl\PplDeeplV3Requests\Service\DeepLRequestContextFactory;
 
 final class TranslationRequestBuilder
 {
     public function __construct(
-        private readonly LocaleLanguageMapper $languageMapper
+        private readonly LocaleLanguageMapper $languageMapper,
+        private readonly ?DeepLRequestContextFactory $contextFactory = null
     ) {}
 
     /**
@@ -74,7 +78,8 @@ final class TranslationRequestBuilder
                 $group['glossaryId'],
                 $group['styleRuleId'],
                 $group['tagHandling'],
-                $group['customInstructions']
+                $group['customInstructions'],
+                $this->createContext()
             );
         }
 
@@ -102,5 +107,24 @@ final class TranslationRequestBuilder
         $lines = array_values(array_filter(array_map('trim', $lines), static fn(string $line): bool => $line !== ''));
 
         return array_slice(array_values(array_unique($lines)), 0, 10);
+    }
+
+    private function createContext(): DeepLRequestContext
+    {
+        if ($this->contextFactory instanceof DeepLRequestContextFactory) {
+            return $this->contextFactory->createDefaultContext();
+        }
+
+        return new DeepLRequestContext(
+            'test',
+            'test',
+            'https://api.deepl.com',
+            'test',
+            10.0,
+            60.0,
+            1048576,
+            new RetryPolicy(1, 0, 0),
+            'test'
+        );
     }
 }

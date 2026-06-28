@@ -8,9 +8,6 @@
     }
 
     const overflowClampCss = [
-        ':host,',
-        'html,',
-        'body,',
         'typo3-backend-module-router,',
         'typo3-iframe-module,',
         '#typo3-contentIframe,',
@@ -18,16 +15,16 @@
         '.scaffold-content-module,',
         '.scaffold-content-module-iframe,',
         '.t3js-scaffold-content-module-iframe {',
-        '  box-sizing: border-box !important;',
-        '  max-width: 100% !important;',
-        '  min-width: 0 !important;',
-        '  overflow-x: hidden !important;',
+        '  box-sizing: border-box;',
+        '  max-width: 100%;',
+        '  min-width: 0;',
+        '  overflow-x: hidden;',
         '}',
         '#typo3-contentIframe,',
         '.scaffold-content-module-iframe,',
         '.t3js-scaffold-content-module-iframe {',
-        '  display: block !important;',
-        '  width: 100% !important;',
+        '  display: block;',
+        '  width: 100%;',
         '}'
     ].join('\n');
 
