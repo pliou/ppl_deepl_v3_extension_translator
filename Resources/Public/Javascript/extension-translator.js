@@ -1,0 +1,702 @@
+(function () {
+    function ready(callback) {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', callback);
+            return;
+        }
+        callback();
+    }
+
+    function init(root) {
+        const form = (root || document).querySelector('#pplExtensionTranslatorForm');
+        if (!form || form.dataset.pplEtBound === '1') {
+            return;
+        }
+        form.dataset.pplEtBound = '1';
+
+        const activeTab = form.querySelector('[data-role="active-tab"]');
+        const activeSolution = form.querySelector('[data-role="active-solution"]');
+        const scanPath = form.querySelector('#scan_path');
+        const scopeSelect = form.querySelector('[data-role="scope-select"]');
+        const selectAll = form.querySelector('[data-role="select-all"]');
+        const selectedCount = form.querySelector('[data-role="selected-count"]');
+        const needsSourceCount = form.querySelector('[data-role="needs-source-count"]');
+        const fileNoneSentinel = form.querySelector('[data-role="file-none-sentinel"]');
+        const selectedOnlyToggle = form.querySelector('[data-role="files-selected-only"]');
+        const sourceLanguage = form.querySelector('[data-role="source-language"]');
+        const targetLanguage = form.querySelector('[data-role="target-language"]');
+        const glossarySelect = form.querySelector('[data-role="glossary-select"]');
+        const glossaryStatus = form.querySelector('[data-role="glossary-status"]');
+        const styleRuleSelect = form.querySelector('[data-role="style-rule-select"]');
+        const styleRuleStatus = form.querySelector('[data-role="style-rule-status"]');
+        const glossaryOptions = readJson('[data-role="glossary-options-json"]');
+        const styleRuleOptions = readJson('[data-role="style-rule-options-json"]');
+        const pageSize = form.querySelector('[data-role="page-size"]');
+        const pagePrev = form.querySelector('[data-role="page-prev"]');
+        const pageNext = form.querySelector('[data-role="page-next"]');
+        const pageRange = form.querySelector('[data-role="page-range"]');
+        const pageNumber = form.querySelector('[data-role="page-number"]');
+        let refreshTimer = 0;
+        let currentPage = 1;
+
+        function fileList() {
+            return form.querySelector('[data-role="file-list"]');
+        }
+
+        function sidebar() {
+            return form.querySelector('.ppl-et__sidebar');
+        }
+
+        function readJson(selector) {
+            const node = form.querySelector(selector);
+            if (!node) {
+                return {};
+            }
+            try {
+                return JSON.parse(node.textContent || '{}');
+            } catch (error) {
+                return {};
+            }
+        }
+
+        function findingCheckboxes() {
+            return Array.prototype.slice.call(form.querySelectorAll('[data-role="finding-checkbox"]'));
+        }
+
+        function findingRows() {
+            return Array.prototype.slice.call(form.querySelectorAll('[data-role="finding-row"]'));
+        }
+
+        function fileCheckboxes() {
+            return Array.prototype.slice.call(form.querySelectorAll('[data-role="file-checkbox"]'));
+        }
+
+        function fileItems() {
+            return Array.prototype.slice.call(form.querySelectorAll('[data-role="file-item"]'));
+        }
+
+        function rowIsVisible(row) {
+            return !!row && !row.hidden && row.offsetParent !== null;
+        }
+
+        function visibleFindingCheckboxes() {
+            return findingCheckboxes().filter(function (checkbox) {
+                return rowIsVisible(checkbox.closest('tr')) && !checkbox.disabled;
+            });
+        }
+
+        function truthy(value) {
+            return value === true || value === '1' || value === 'true';
+        }
+
+        function updateSelectedCount() {
+            const checkedBoxes = findingCheckboxes().filter(function (checkbox) {
+                return checkbox.checked;
+            });
+            if (selectedCount) {
+                selectedCount.textContent = String(checkedBoxes.length);
+            }
+            if (needsSourceCount) {
+                const needsSource = checkedBoxes.filter(function (checkbox) {
+                    const row = checkbox.closest('tr');
+                    return truthy(row ? row.getAttribute('data-needs-source') : '');
+                }).length;
+                needsSourceCount.textContent = String(needsSource);
+            }
+        }
+
+        function updateSelectAllState() {
+            if (!selectAll) {
+                return;
+            }
+            const visibleCheckboxes = visibleFindingCheckboxes();
+            const checkedVisible = visibleCheckboxes.filter(function (checkbox) {
+                return checkbox.checked;
+            }).length;
+            selectAll.disabled = visibleCheckboxes.length === 0;
+            selectAll.checked = visibleCheckboxes.length > 0 && checkedVisible === visibleCheckboxes.length;
+            selectAll.indeterminate = checkedVisible > 0 && checkedVisible < visibleCheckboxes.length;
+        }
+
+        function selectedIssueType() {
+            const selected = findingCheckboxes().find(function (checkbox) {
+                return checkbox.checked;
+            });
+            return selected ? (selected.getAttribute('data-issue-type') || '') : '';
+        }
+
+        function updateIssueTypeGuards() {
+            const issueType = selectedIssueType();
+            findingCheckboxes().forEach(function (checkbox) {
+                const rowIssueType = checkbox.getAttribute('data-issue-type') || '';
+                const blocked = issueType !== '' && rowIssueType !== issueType && !checkbox.checked;
+                checkbox.disabled = blocked;
+                const row = checkbox.closest('tr');
+                if (row) {
+                    row.classList.toggle('ppl-et__row--type-disabled', blocked);
+                }
+            });
+            updateSelectAllState();
+        }
+
+        function enforceSingleIssueType(changedCheckbox) {
+            if (!changedCheckbox.checked) {
+                updateIssueTypeGuards();
+                return;
+            }
+            const issueType = changedCheckbox.getAttribute('data-issue-type') || '';
+            findingCheckboxes().forEach(function (checkbox) {
+                if (checkbox !== changedCheckbox && checkbox.checked && checkbox.getAttribute('data-issue-type') !== issueType) {
+                    checkbox.checked = false;
+                }
+            });
+            updateIssueTypeGuards();
+        }
+
+        function queueRefresh(stateOverride) {
+            window.clearTimeout(refreshTimer);
+            refreshTimer = window.setTimeout(function () {
+                ajaxSubmit('refresh_selection', null, stateOverride);
+            }, 120);
+        }
+
+        function captureUiState() {
+            const fileListNode = fileList();
+            const sidebarNode = sidebar();
+            const fileSearchNode = form.querySelector('[data-role="file-search"]');
+
+            return {
+                fileListScrollTop: fileListNode ? fileListNode.scrollTop : 0,
+                sidebarScrollTop: sidebarNode ? sidebarNode.scrollTop : 0,
+                fileSearch: fileSearchNode ? fileSearchNode.value : '',
+                selectedOnly: !!(selectedOnlyToggle && selectedOnlyToggle.classList.contains('is-active')),
+                windowScrollX: window.scrollX || 0,
+                windowScrollY: window.scrollY || 0
+            };
+        }
+
+        function restoreUiState(state) {
+            if (!state) {
+                return;
+            }
+
+            const nextForm = document.querySelector('#pplExtensionTranslatorForm');
+            if (!nextForm) {
+                return;
+            }
+
+            const fileSearchNode = nextForm.querySelector('[data-role="file-search"]');
+            if (fileSearchNode && state.fileSearch !== '') {
+                fileSearchNode.value = state.fileSearch;
+            }
+
+            const selectedOnlyNode = nextForm.querySelector('[data-role="files-selected-only"]');
+            if (selectedOnlyNode && state.selectedOnly) {
+                selectedOnlyNode.classList.add('is-active');
+            }
+
+            init(document);
+
+            window.requestAnimationFrame(function () {
+                const fileListNode = nextForm.querySelector('[data-role="file-list"]');
+                const sidebarNode = nextForm.querySelector('.ppl-et__sidebar');
+                if (fileListNode) {
+                    fileListNode.scrollTop = state.fileListScrollTop;
+                }
+                if (sidebarNode) {
+                    sidebarNode.scrollTop = state.sidebarScrollTop;
+                }
+                window.scrollTo(state.windowScrollX, state.windowScrollY);
+            });
+        }
+
+        function ajaxSubmit(action, submitter, stateOverride) {
+            if (action === 'scan') {
+                form.submit();
+                return;
+            }
+
+            const uiState = stateOverride || captureUiState();
+
+            const data = new FormData(form);
+            data.set('ppl_et_ajax', '1');
+            if (action) {
+                data.set('module_action', action);
+            } else if (submitter && submitter.name) {
+                data.set(submitter.name, submitter.value || '');
+            }
+
+            form.classList.add('is-loading');
+            fetch(form.action, {
+                method: 'POST',
+                body: data,
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+                .then(function (response) {
+                    const contentType = response.headers.get('content-type') || '';
+                    if (contentType.indexOf('application/json') > -1) {
+                        return response.json();
+                    }
+                    return response.text();
+                })
+                .then(function (payload) {
+                    const html = typeof payload === 'string'
+                        ? payload
+                        : String(payload && payload.fragments && payload.fragments.module ? payload.fragments.module : '');
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const next = doc.querySelector('.ppl-et');
+                    const current = document.querySelector('.ppl-et');
+                    if (!next || !current) {
+                        window.location.reload();
+                        return;
+                    }
+                    current.replaceWith(next);
+                    restoreUiState(uiState);
+                })
+                .catch(function () {
+                    window.location.reload();
+                });
+        }
+
+        function updateFileNoneSentinel() {
+            if (!fileNoneSentinel) {
+                return;
+            }
+            fileNoneSentinel.disabled = fileCheckboxes().some(function (checkbox) {
+                return checkbox.checked;
+            });
+        }
+
+        function updateFileFilters() {
+            const searchNode = form.querySelector('[data-role="file-search"]');
+            const search = String(searchNode ? searchNode.value : '').trim().toLowerCase();
+            const selectedOnly = !!(selectedOnlyToggle && selectedOnlyToggle.classList.contains('is-active'));
+            fileItems().forEach(function (item) {
+                const checkbox = item.querySelector('[data-role="file-checkbox"]');
+                const matchesSearch = search === '' || String(item.getAttribute('data-search') || '').indexOf(search) > -1;
+                const matchesSelection = !selectedOnly || !!(checkbox && checkbox.checked);
+                item.hidden = !matchesSearch || !matchesSelection;
+            });
+            updateFileNoneSentinel();
+        }
+
+        function updateLocaleOptions() {
+            const localeFilter = form.querySelector('[data-role="locale-filter"]');
+            if (!localeFilter) {
+                return;
+            }
+            const previous = localeFilter.value;
+            const labels = {};
+            findingRows().forEach(function (row) {
+                const locale = String(row.getAttribute('data-locale') || '').trim();
+                if (locale !== '') {
+                    labels[locale] = true;
+                }
+            });
+            Array.prototype.slice.call(localeFilter.querySelectorAll('option:not([value=""])')).forEach(function (option) {
+                option.remove();
+            });
+            Object.keys(labels).sort().forEach(function (locale) {
+                const option = document.createElement('option');
+                option.value = locale;
+                option.textContent = locale;
+                localeFilter.appendChild(option);
+            });
+            localeFilter.value = Object.prototype.hasOwnProperty.call(labels, previous) ? previous : '';
+        }
+
+        function rowMatchesFilters(row) {
+            const searchNode = form.querySelector('[data-role="finding-search"]');
+            const localeFilter = form.querySelector('[data-role="locale-filter"]');
+            const stateFilter = form.querySelector('[data-role="state-filter"]');
+            const search = String(searchNode ? searchNode.value : '').trim().toLowerCase();
+            const locale = String(localeFilter ? localeFilter.value : '').trim();
+            const state = String(stateFilter ? stateFilter.value : '').trim();
+            const rowState = String(row.getAttribute('data-state') || '').trim();
+
+            if (search !== '' && String(row.getAttribute('data-search') || '').indexOf(search) === -1) {
+                return false;
+            }
+            if (locale !== '' && String(row.getAttribute('data-locale') || '') !== locale) {
+                return false;
+            }
+            if (state === '') {
+                return true;
+            }
+            if (state === 'needs_source') {
+                return truthy(row.getAttribute('data-needs-source'));
+            }
+
+            return rowState === state;
+        }
+
+        function updateFindingFilters(resetPage) {
+            if (resetPage) {
+                currentPage = 1;
+            }
+            const rows = findingRows();
+            const matchedRows = rows.filter(rowMatchesFilters);
+            const size = pageSize ? Math.max(1, parseInt(pageSize.value || '25', 10)) : matchedRows.length || 1;
+            const totalPages = Math.max(1, Math.ceil(matchedRows.length / size));
+            currentPage = Math.min(Math.max(1, currentPage), totalPages);
+            const start = (currentPage - 1) * size;
+            const end = start + size;
+
+            rows.forEach(function (row) {
+                row.hidden = true;
+            });
+            matchedRows.slice(start, end).forEach(function (row) {
+                row.hidden = false;
+            });
+
+            if (pageRange) {
+                const first = matchedRows.length === 0 ? 0 : start + 1;
+                const last = Math.min(end, matchedRows.length);
+                pageRange.textContent = first + '-' + last + ' of ' + matchedRows.length;
+            }
+            if (pageNumber) {
+                pageNumber.textContent = String(currentPage);
+            }
+            if (pagePrev) {
+                pagePrev.disabled = currentPage <= 1;
+            }
+            if (pageNext) {
+                pageNext.disabled = currentPage >= totalPages;
+            }
+            updateSelectAllState();
+        }
+
+        function selectVisibleFindings() {
+            let issueType = activeTab && activeTab.value !== 'overview' ? activeTab.value : selectedIssueType();
+            if (issueType === '') {
+                const firstVisible = findingCheckboxes().find(function (checkbox) {
+                    return rowIsVisible(checkbox.closest('tr'));
+                });
+                issueType = firstVisible ? (firstVisible.getAttribute('data-issue-type') || '') : '';
+            }
+
+            findingCheckboxes().forEach(function (checkbox) {
+                const row = checkbox.closest('tr');
+                checkbox.checked = rowIsVisible(row) && (issueType === '' || checkbox.getAttribute('data-issue-type') === issueType);
+            });
+            updateSelectedCount();
+            updateIssueTypeGuards();
+        }
+
+        function clearVisibleFindings() {
+            findingCheckboxes().forEach(function (checkbox) {
+                const row = checkbox.closest('tr');
+                if (rowIsVisible(row)) {
+                    checkbox.checked = false;
+                    checkbox.disabled = false;
+                }
+            });
+            updateSelectedCount();
+            updateIssueTypeGuards();
+        }
+
+        function normalizeLanguage(language) {
+            const value = String(language || '').trim().toUpperCase().replace('_', '-');
+            if (value === 'DE-DE') {
+                return 'DE';
+            }
+            if (value.indexOf('-') > -1) {
+                return value.split('-', 1)[0];
+            }
+            return value;
+        }
+
+        function replaceOptions(select, emptyLabel, options, previousValue) {
+            select.innerHTML = '';
+            const emptyOption = document.createElement('option');
+            emptyOption.value = '';
+            emptyOption.textContent = emptyLabel;
+            select.appendChild(emptyOption);
+            Object.keys(options).forEach(function (value) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = options[value];
+                select.appendChild(option);
+            });
+            select.value = previousValue && Object.prototype.hasOwnProperty.call(options, previousValue) ? previousValue : '';
+        }
+
+        function updateTranslationOptions() {
+            if (sourceLanguage && targetLanguage && glossarySelect) {
+                const previous = glossarySelect.value;
+                const hasTarget = targetLanguage.value !== '';
+                const key = normalizeLanguage(sourceLanguage.value) + ':' + normalizeLanguage(targetLanguage.value);
+                const options = hasTarget ? (glossaryOptions[key] || {}) : {};
+                replaceOptions(glossarySelect, 'No glossary', options, previous);
+                glossarySelect.disabled = Object.keys(options).length === 0;
+                if (glossaryStatus) {
+                    glossaryStatus.textContent = hasTarget && Object.keys(options).length > 0
+                        ? 'Glossary available for this language pair.'
+                        : 'Choose a target override to select a glossary.';
+                }
+            }
+
+            if (targetLanguage && styleRuleSelect) {
+                const previous = styleRuleSelect.value;
+                const language = normalizeLanguage(targetLanguage.value);
+                const options = language !== '' ? (styleRuleOptions[language] || {}) : {};
+                replaceOptions(styleRuleSelect, 'No style rule', options, previous);
+                styleRuleSelect.disabled = Object.keys(options).length === 0;
+                if (styleRuleStatus) {
+                    styleRuleStatus.textContent = language !== '' && Object.keys(options).length > 0
+                        ? 'Style rules available for this target language.'
+                        : 'Choose a target override to select a style rule.';
+                }
+            }
+        }
+
+        form.querySelectorAll('[data-scope-path]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                if (scanPath) {
+                    scanPath.value = button.getAttribute('data-scope-path') || '';
+                    scanPath.focus();
+                }
+            });
+        });
+
+        if (scopeSelect && scanPath) {
+            scopeSelect.value = scanPath.value;
+            scopeSelect.addEventListener('change', function () {
+                if (scopeSelect.value !== '') {
+                    scanPath.value = scopeSelect.value;
+                }
+            });
+        }
+
+        form.querySelectorAll('[data-tab-value]').forEach(function (button) {
+            const tabValue = button.getAttribute('data-tab-value') || 'overview';
+            if (activeTab && activeTab.value === tabValue) {
+                button.classList.add('is-active');
+                const details = button.closest('details');
+                if (details) {
+                    details.open = true;
+                    const summary = details.querySelector('summary');
+                    if (summary) {
+                        summary.classList.add('is-active');
+                    }
+                }
+            }
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (activeTab) {
+                    activeTab.value = tabValue;
+                }
+                if (activeSolution) {
+                    activeSolution.value = '';
+                }
+                findingCheckboxes().forEach(function (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.disabled = false;
+                });
+                updateSelectedCount();
+                ajaxSubmit('refresh_selection');
+            });
+        });
+
+        form.querySelectorAll('[data-solution-value]').forEach(function (button) {
+            const solutionValue = button.getAttribute('data-solution-value') || '';
+            if (activeSolution && activeSolution.value === solutionValue) {
+                button.classList.add('is-active');
+            }
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                if (button.getAttribute('data-solution-disabled') === '1' || button.getAttribute('aria-disabled') === 'true') {
+                    return;
+                }
+                if (activeSolution) {
+                    activeSolution.value = solutionValue;
+                }
+                ajaxSubmit('refresh_selection');
+            });
+        });
+
+        findingRows().forEach(function (row) {
+            row.addEventListener('click', function (event) {
+                if (event.target.closest('a, button, input, textarea, select, label')) {
+                    return;
+                }
+                const checkbox = row.querySelector('[data-role="finding-checkbox"]');
+                if (!checkbox || checkbox.disabled) {
+                    return;
+                }
+                checkbox.checked = !checkbox.checked;
+                enforceSingleIssueType(checkbox);
+                updateSelectedCount();
+            });
+        });
+
+        findingCheckboxes().forEach(function (checkbox) {
+            checkbox.addEventListener('change', function () {
+                enforceSingleIssueType(checkbox);
+                updateSelectedCount();
+            });
+        });
+
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                if (selectAll.checked) {
+                    selectVisibleFindings();
+                    return;
+                }
+                clearVisibleFindings();
+            });
+        }
+
+        form.querySelectorAll('[data-role="select-visible"]').forEach(function (button) {
+            button.addEventListener('click', selectVisibleFindings);
+        });
+
+        form.querySelectorAll('[data-role="clear-selection"]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                findingCheckboxes().forEach(function (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.disabled = false;
+                });
+                if (selectAll) {
+                    selectAll.checked = false;
+                    selectAll.indeterminate = false;
+                }
+                updateSelectedCount();
+                updateIssueTypeGuards();
+                updateSelectAllState();
+            });
+        });
+
+        fileCheckboxes().forEach(function (checkbox) {
+            checkbox.addEventListener('change', function () {
+                const uiState = captureUiState();
+                updateFileFilters();
+                queueRefresh(uiState);
+            });
+        });
+
+        const fileSearch = form.querySelector('[data-role="file-search"]');
+        if (fileSearch) {
+            fileSearch.addEventListener('input', updateFileFilters);
+        }
+
+        const filesSelectAll = form.querySelector('[data-role="files-select-all"]');
+        if (filesSelectAll) {
+            filesSelectAll.addEventListener('click', function () {
+                const uiState = captureUiState();
+                fileCheckboxes().forEach(function (checkbox) {
+                    checkbox.checked = true;
+                });
+                updateFileFilters();
+                queueRefresh(uiState);
+            });
+        }
+
+        const filesDeselectAll = form.querySelector('[data-role="files-deselect-all"]');
+        if (filesDeselectAll) {
+            filesDeselectAll.addEventListener('click', function () {
+                const uiState = captureUiState();
+                fileCheckboxes().forEach(function (checkbox) {
+                    checkbox.checked = false;
+                });
+                updateFileFilters();
+                queueRefresh(uiState);
+            });
+        }
+
+        if (selectedOnlyToggle) {
+            selectedOnlyToggle.addEventListener('click', function () {
+                selectedOnlyToggle.classList.toggle('is-active');
+                updateFileFilters();
+            });
+        }
+
+        const findingSearch = form.querySelector('[data-role="finding-search"]');
+        if (findingSearch) {
+            findingSearch.addEventListener('input', function () {
+                updateFindingFilters(true);
+            });
+        }
+
+        const localeFilter = form.querySelector('[data-role="locale-filter"]');
+        if (localeFilter) {
+            localeFilter.addEventListener('change', function () {
+                updateFindingFilters(true);
+            });
+        }
+
+        const stateFilter = form.querySelector('[data-role="state-filter"]');
+        if (stateFilter) {
+            stateFilter.addEventListener('change', function () {
+                updateFindingFilters(true);
+            });
+        }
+
+        if (pageSize) {
+            pageSize.addEventListener('change', function () {
+                updateFindingFilters(true);
+            });
+        }
+        if (pagePrev) {
+            pagePrev.addEventListener('click', function () {
+                currentPage -= 1;
+                updateFindingFilters(false);
+            });
+        }
+        if (pageNext) {
+            pageNext.addEventListener('click', function () {
+                currentPage += 1;
+                updateFindingFilters(false);
+            });
+        }
+
+        form.querySelectorAll('[data-role="target-key-suggestion"]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                const targetKey = form.querySelector('#target_key');
+                if (!targetKey) {
+                    return;
+                }
+                targetKey.value = button.getAttribute('data-target-key') || '';
+                form.querySelectorAll('[data-role="target-key-suggestion"]').forEach(function (candidateButton) {
+                    candidateButton.classList.toggle('is-selected', candidateButton === button);
+                });
+            });
+        });
+
+        if (sourceLanguage) {
+            sourceLanguage.addEventListener('change', updateTranslationOptions);
+        }
+        if (targetLanguage) {
+            targetLanguage.addEventListener('change', updateTranslationOptions);
+        }
+
+        form.addEventListener('submit', function (event) {
+            const submitter = event.submitter;
+            const action = submitter && submitter.name === 'module_action' ? submitter.value : '';
+            if (action === 'scan') {
+                updateFileNoneSentinel();
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            ajaxSubmit(action, submitter);
+        });
+
+        updateSelectedCount();
+        updateIssueTypeGuards();
+        updateFileFilters();
+        updateLocaleOptions();
+        updateFindingFilters(false);
+        updateTranslationOptions();
+    }
+
+    ready(function () {
+        init(document);
+    });
+}());
