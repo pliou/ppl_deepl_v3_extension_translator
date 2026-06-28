@@ -208,26 +208,25 @@ final class TranslationKeyScanner
         if (preg_match_all('#<f:translate\b[^>]*>#i', $contents, $tagMatches)) {
             foreach ($tagMatches[0] as $tag) {
                 $attributes = $this->attributesFromTag($tag);
-                $rawKey = (string)($attributes['key'] ?? $attributes['id'] ?? '');
                 $key = $this->translationKeyFromAttributes($attributes);
                 if ($key === '' || str_starts_with($key, 'LLL:')) {
                     continue;
                 }
-                $this->addKey($keys, $key, $relativeFile, $this->fluidLanguageFileHint($rawKey, $relativeFile), (string)($attributes['default'] ?? ''));
+                $this->addKey($keys, $key, $relativeFile, '', (string)($attributes['default'] ?? ''));
             }
         }
 
         if (preg_match_all('#\{f:translate\((.*?)\)\}#is', $contents, $inlineMatches)) {
             foreach ($inlineMatches[1] as $arguments) {
-                $rawKey = $this->argumentValue($arguments, 'key');
-                if ($rawKey === '') {
-                    $rawKey = $this->argumentValue($arguments, 'id');
+                $key = $this->argumentValue($arguments, 'key');
+                if ($key === '') {
+                    $key = $this->argumentValue($arguments, 'id');
                 }
-                $key = $this->translationKeyFromValue($rawKey);
+                $key = $this->translationKeyFromValue($key);
                 if ($key === '' || str_starts_with($key, 'LLL:')) {
                     continue;
                 }
-                $this->addKey($keys, $key, $relativeFile, $this->fluidLanguageFileHint($rawKey, $relativeFile), $this->argumentValue($arguments, 'default'));
+                $this->addKey($keys, $key, $relativeFile, '', $this->argumentValue($arguments, 'default'));
             }
         }
 
@@ -262,31 +261,17 @@ final class TranslationKeyScanner
         $this->collectDomainConcatenatedKeys($contents, $relativeFile, $keys);
         $this->collectTranslationWrapperArgumentKeys($contents, $relativeFile, $keys);
         $this->collectTranslationFieldKeys($contents, $relativeFile, $keys);
-        $this->collectConfigurationMappingGeneratedKeys($contents, $relativeFile, $keys);
-        if ($this->shouldCollectLooseTranslationLiterals($relativeFile)) {
-            $this->collectKnownUnderscoreTranslationKeyLiterals($contents, $relativeFile, $keys);
-            $this->collectKeyLikeLiterals($contents, $relativeFile, $keys);
-        }
-    }
-
-    private function shouldCollectLooseTranslationLiterals(string $relativeFile): bool
-    {
-        if (str_ends_with($relativeFile, 'Classes/Service/TranslationKeyScanner.php')) {
-            return false;
-        }
-
-        foreach ([
-            '/Classes/Command/',
-            '/Classes/Repository/',
-            '/Classes/Updates/',
-            '/Configuration/TCA/',
-        ] as $pathPart) {
-            if (str_contains('/' . $relativeFile, $pathPart)) {
-                return false;
-            }
-        }
-
-        return true;
+        $this->collectSetupGuideGeneratedKeys($contents, $relativeFile, $keys);
+        $this->collectWorkflowSeededTranslationKeys($contents, $relativeFile, $keys);
+        $this->collectFrontendProfileGeneratedKeys($contents, $relativeFile, $keys);
+        $this->collectFrontendProjectGeneratedKeys($contents, $relativeFile, $keys);
+        $this->collectFrontendShellGeneratedKeys($contents, $relativeFile, $keys);
+        $this->collectFrontendTaskListGeneratedKeys($contents, $relativeFile, $keys);
+        $this->collectIdentityAdminGeneratedKeys($contents, $relativeFile, $keys);
+        $this->collectDelegationScopeGeneratedKeys($contents, $relativeFile, $keys);
+        $this->collectPlanGeneratedKeys($contents, $relativeFile, $keys);
+        $this->collectKnownUnderscoreTranslationKeyLiterals($contents, $relativeFile, $keys);
+        $this->collectKeyLikeLiterals($contents, $relativeFile, $keys);
     }
 
     /**
@@ -334,7 +319,7 @@ final class TranslationKeyScanner
      */
     private function addKey(array &$keys, string $key, string $sourceFile, string $languageFile, string $defaultValue = ''): void
     {
-        if ($key === '' || str_ends_with($key, '.') || str_ends_with($key, ':') || str_ends_with($key, '_')) {
+        if ($key === '' || str_ends_with($key, '.') || str_ends_with($key, ':')) {
             return;
         }
 
@@ -561,26 +546,17 @@ final class TranslationKeyScanner
      */
     private function collectTranslationWrapperArgumentKeys(string $contents, string $relativeFile, array &$keys): void
     {
-        if (!preg_match_all('#(?:->translate|translate[A-Z][A-Za-z0-9_]*|translateBy[A-Za-z0-9_]*|->label|\bt[A-Z][A-Za-z0-9_]*|(?:->|\.)t)\s*\(([^;{}]{0,1000}?)\)#s', $contents, $calls)) {
+        if (!preg_match_all('#(?:->translate|translate[A-Z][A-Za-z0-9_]*|translateBy[A-Za-z0-9_]*|->label|\bt[A-Z][A-Za-z0-9_]*|(?:->|\.)t)\s*\(([^;{}]{0,1000})\)#s', $contents, $calls)) {
             return;
         }
 
         foreach ($calls[1] as $arguments) {
-            $firstArgument = $this->firstCallArgument((string)$arguments);
-            if (!preg_match_all('#(["\'])([A-Za-z][A-Za-z0-9_.:-]+)\1#', $firstArgument, $matches, PREG_SET_ORDER | PREG_OFFSET_CAPTURE)) {
+            if (!preg_match_all('#(["\'])([A-Za-z][A-Za-z0-9_.:-]+)\1#', (string)$arguments, $matches, PREG_SET_ORDER)) {
                 continue;
             }
 
             foreach ($matches as $match) {
-                $literalStart = (int)$match[0][1];
-                $literalEnd = $literalStart + strlen((string)$match[0][0]);
-                $before = substr(rtrim(substr($firstArgument, 0, $literalStart)), -1);
-                $after = substr(ltrim(substr($firstArgument, $literalEnd)), 0, 1);
-                if ($before === '[' || $after === ']') {
-                    continue;
-                }
-
-                $this->addKey($keys, $this->cleanKey((string)$match[2][0]), $relativeFile, '');
+                $this->addKey($keys, $this->cleanKey((string)$match[2]), $relativeFile, '');
             }
         }
     }
@@ -612,6 +588,10 @@ final class TranslationKeyScanner
             'summaryKey',
             'titleKey',
             'valueLabelKey',
+            'description',
+            'help',
+            'label',
+            'placeholder',
         ];
 
         $pattern = '#["\'](?:' . implode('|', array_map(static fn(string $fieldName): string => preg_quote($fieldName, '#'), $fieldNames)) . ')["\']\s*=>\s*(["\'])([A-Za-z0-9_.:-]+)\1#';
@@ -624,65 +604,209 @@ final class TranslationKeyScanner
         }
     }
 
-    private function firstCallArgument(string $arguments): string
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectSetupGuideGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
     {
-        $arguments = trim($arguments);
-        $length = strlen($arguments);
-        $depth = 0;
-        $quote = '';
-
-        for ($i = 0; $i < $length; $i++) {
-            $char = $arguments[$i];
-            if ($quote !== '') {
-                if ($char === '\\') {
-                    $i++;
-                    continue;
-                }
-                if ($char === $quote) {
-                    $quote = '';
-                }
-                continue;
-            }
-
-            if ($char === '"' || $char === "'") {
-                $quote = $char;
-                continue;
-            }
-
-            if ($char === '(' || $char === '[') {
-                $depth++;
-                continue;
-            }
-
-            if (($char === ')' || $char === ']') && $depth > 0) {
-                $depth--;
-                continue;
-            }
-
-            if ($char === ',' && $depth === 0) {
-                return trim(substr($arguments, 0, $i));
-            }
+        if (!str_ends_with($relativeFile, 'Classes/Service/SetupGuideService.php')) {
+            return;
+        }
+        if (preg_match('#private const STEPS\s*=\s*\[(.*?)^\s*\];#ms', $contents, $match) !== 1) {
+            return;
         }
 
-        return $arguments;
+        $stepKeys = [];
+        if (preg_match_all("#^\s{8}'([a-z][a-z0-9_]*)'\s*=>\s*\[#m", (string)$match[1], $stepMatches)) {
+            $stepKeys = array_values(array_unique($stepMatches[1]));
+        }
+
+        $stepSuffixes = [
+            'title',
+            'description',
+            'detail',
+            'default_values',
+            'recommendation',
+            'action_label',
+            'action_help',
+            'setup_action_label',
+            'setup_action_help',
+        ];
+
+        foreach ($stepKeys as $stepKey) {
+            foreach ($stepSuffixes as $suffix) {
+                $this->addKey($keys, 'step_' . $stepKey . '_' . $suffix, $relativeFile, '');
+            }
+            $this->addKey($keys, 'requirement_' . $stepKey, $relativeFile, '');
+            $this->addKey($keys, 'existing_values_' . $stepKey, $relativeFile, '');
+            $this->addKey($keys, 'summary_' . $stepKey . '_ready', $relativeFile, '');
+            $this->addKey($keys, 'summary_' . $stepKey . '_open', $relativeFile, '');
+        }
+
+        $this->addKey($keys, 'summary_finish_ready', $relativeFile, '');
+        $this->addKey($keys, 'summary_finish_open', $relativeFile, '');
     }
 
     /**
      * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
      */
-    private function collectConfigurationMappingGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
+    private function collectWorkflowSeededTranslationKeys(string $contents, string $relativeFile, array &$keys): void
     {
-        if (!str_ends_with($relativeFile, 'Classes/Mapping/ConfigurationMapping.php')) {
+        if (!str_contains($relativeFile, '/Updates/')) {
             return;
         }
 
-        $languageFile = 'Resources/Private/Language/Config/config.xlf';
-        if (!preg_match_all("#['\"](?:label|description|placeholder)['\"]\s*=>\s*['\"]([A-Za-z0-9_.:-]+)['\"]#", $contents, $matches)) {
+        if (preg_match("#WORKFLOW_KEY\s*=\s*'([A-Za-z0-9_:-]+)'#", $contents, $match) === 1) {
+            $this->addKey($keys, 'template_' . $this->cleanKey((string)$match[1]) . '_label', $relativeFile, '');
+        }
+
+        if (preg_match('#TEMPLATE_DEFINITIONS\s*=\s*\[(.*?)^\s*\];#ms', $contents, $match) === 1) {
+            if (preg_match_all("#^\s{8}'([A-Za-z0-9_:-]+)'\s*=>\s*\[#m", (string)$match[1], $templateMatches)) {
+                foreach (array_unique($templateMatches[1]) as $workflowKey) {
+                    $this->addKey($keys, 'template_' . $this->cleanKey((string)$workflowKey) . '_label', $relativeFile, '');
+                }
+            }
+        }
+
+        foreach (['PHASES', 'DEVELOPMENT_PHASES'] as $constantName) {
+            foreach ($this->stringKeysFromArrayConstant($contents, $constantName) as $phaseKey) {
+                $this->addKey($keys, 'phase_' . $phaseKey . '_label', $relativeFile, '');
+            }
+        }
+
+        foreach (['TRANSITIONS', 'DEVELOPMENT_TRANSITIONS'] as $constantName) {
+            foreach ($this->stringKeysFromArrayConstant($contents, $constantName) as $transitionKey) {
+                $this->addKey($keys, 'transition_' . $transitionKey . '_label', $relativeFile, '');
+            }
+        }
+    }
+
+    /**
+     * @return string[]
+     */
+    private function stringKeysFromArrayConstant(string $contents, string $constantName): array
+    {
+        if (preg_match('#private const ' . preg_quote($constantName, '#') . '\s*=\s*\[(.*?)^\s*\];#ms', $contents, $match) !== 1) {
+            return [];
+        }
+        if (!preg_match_all("#'key'\s*=>\s*'([A-Za-z0-9_:-]+)'#", (string)$match[1], $keyMatches)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_map([$this, 'cleanKey'], $keyMatches[1])));
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectIdentityAdminGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
+    {
+        if (!str_ends_with($relativeFile, 'Classes/Service/IdentityAdminReadModelService.php')) {
             return;
         }
 
-        foreach (array_unique($matches[1]) as $key) {
-            $this->addKey($keys, $this->cleanKey((string)$key), $relativeFile, $languageFile);
+        foreach (['invited', 'active', 'disabled', 'left', 'anonymized', 'unknown'] as $statusKey) {
+            $this->addKey($keys, 'identity_status_' . $statusKey, $relativeFile, '');
+        }
+
+        foreach (['be_user', 'fe_user', 'external', 'unknown'] as $sourceType) {
+            $this->addKey($keys, 'identity_account_source_' . $sourceType, $relativeFile, '');
+        }
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectFrontendProfileGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
+    {
+        if (!str_ends_with($relativeFile, 'Classes/Service/FrontendProfileReadModelService.php')) {
+            return;
+        }
+
+        foreach (['system', 'light', 'dark'] as $themeMode) {
+            $this->addKey($keys, 'profile.theme.' . $themeMode, $relativeFile, '');
+        }
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectFrontendProjectGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
+    {
+        if (!str_ends_with($relativeFile, 'Classes/Service/FrontendProjectDetailPageReadService.php')) {
+            return;
+        }
+
+        foreach (['draft', 'active', 'paused', 'completed', 'archived'] as $status) {
+            $this->addKey($keys, 'project.status.' . $status, $relativeFile, '');
+        }
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectFrontendShellGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
+    {
+        if (!str_ends_with($relativeFile, 'Classes/Service/FrontendShellReadModelService.php')) {
+            return;
+        }
+
+        foreach (['state.unmapped', 'state.permission', 'my_tasks.unmapped', 'my_tasks.permission', 'task_list.unmapped', 'task_list.permission'] as $prefix) {
+            $this->addKey($keys, $prefix . '.title', $relativeFile, '');
+            $this->addKey($keys, $prefix . '.message', $relativeFile, '');
+        }
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectFrontendTaskListGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
+    {
+        if (!str_ends_with($relativeFile, 'Classes/Service/FrontendTaskListService.php')) {
+            return;
+        }
+
+        foreach (['all', 'project_backlog', 'board_backlog', 'board_work', 'invalid'] as $workspaceFilter) {
+            $this->addKey($keys, 'task_list.filter.workspace.' . $workspaceFilter, $relativeFile, '');
+        }
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectDelegationScopeGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
+    {
+        if (!str_ends_with($relativeFile, 'Classes/Service/DelegationAdminReadModelService.php')) {
+            return;
+        }
+
+        foreach (['global', 'organization', 'project', 'board', 'group', 'task'] as $scopeType) {
+            $this->addKey($keys, 'delegation_scope_' . $scopeType, $relativeFile, '');
+            $this->addKey($keys, 'delegation_scope_' . $scopeType . '_hint', $relativeFile, '');
+        }
+    }
+
+    /**
+     * @param array<string, array{key: string, sourceFiles: string[], languageFiles: string[], defaultValue: string, defaultValues: string[]}> $keys
+     */
+    private function collectPlanGeneratedKeys(string $contents, string $relativeFile, array &$keys): void
+    {
+        if (!str_ends_with($relativeFile, 'Classes/Mapping/PlanMapping.php')) {
+            return;
+        }
+
+        foreach ([
+            'organization_quota_user_identities_active',
+            'organization_quota_projects_active',
+            'organization_quota_boards_active',
+            'organization_quota_tasks_active',
+            'organization_quota_storage_mb',
+            'organization_quota_status_ok',
+            'organization_quota_status_warning',
+            'organization_quota_status_blocked',
+            'organization_quota_status_exceeded',
+        ] as $key) {
+            $this->addKey($keys, $key, $relativeFile, '');
         }
     }
 
@@ -743,7 +867,7 @@ final class TranslationKeyScanner
 
     private function looksLikeKnownUnderscoreTranslationKey(string $key): bool
     {
-        if ($key === '' || str_ends_with($key, '_') || str_contains($key, '{') || str_contains($key, '}')) {
+        if ($key === '' || str_contains($key, '{') || str_contains($key, '}')) {
             return false;
         }
 
@@ -782,46 +906,6 @@ final class TranslationKeyScanner
         }
 
         return $this->translationKeyFromValue((string)($attributes['id'] ?? ''));
-    }
-
-    private function fluidLanguageFileHint(string $rawKey, string $relativeFile): string
-    {
-        if (preg_match('#^\{([A-Za-z][A-Za-z0-9_]*)\}#', trim($rawKey), $match) !== 1) {
-            return '';
-        }
-
-        return match ((string)$match[1]) {
-            'tdTabs', 'td_tabs' => 'Resources/Private/Language/Tabs/tabs.xlf',
-            'td_setup' => 'Resources/Private/Language/Setup/setup.xlf',
-            'td_fe' => 'Resources/Private/Language/Frontend/frontend.xlf',
-            'td_form' => 'Resources/Private/Language/Form/form.xlf',
-            'td' => $this->defaultFluidLanguageFileHint($relativeFile),
-            default => '',
-        };
-    }
-
-    private function defaultFluidLanguageFileHint(string $relativeFile): string
-    {
-        $relativeFile = '/' . trim(str_replace('\\', '/', $relativeFile), '/');
-
-        foreach ([
-            '/Resources/Private/Templates/Config/' => 'Resources/Private/Language/Config/config.xlf',
-            '/Resources/Private/Partials/Config/' => 'Resources/Private/Language/Config/config.xlf',
-            '/Resources/Private/Templates/Task/' => 'Resources/Private/Language/Task/task.xlf',
-            '/Resources/Private/Partials/Task/' => 'Resources/Private/Language/Task/task.xlf',
-            '/Resources/Private/Templates/Board/' => 'Resources/Private/Language/Task/task.xlf',
-            '/Resources/Private/Partials/Board/' => 'Resources/Private/Language/Task/task.xlf',
-            '/Resources/Private/Templates/Frontend/' => 'Resources/Private/Language/Frontend/frontend.xlf',
-            '/Resources/Private/Partials/Frontend/' => 'Resources/Private/Language/Frontend/frontend.xlf',
-            '/Resources/Private/Templates/Setup/' => 'Resources/Private/Language/Setup/setup.xlf',
-            '/Resources/Private/Partials/Setup/' => 'Resources/Private/Language/Setup/setup.xlf',
-        ] as $pathPart => $languageFile) {
-            if (str_contains($relativeFile, $pathPart)) {
-                return $languageFile;
-            }
-        }
-
-        return '';
     }
 
     private function argumentValue(string $arguments, string $name): string

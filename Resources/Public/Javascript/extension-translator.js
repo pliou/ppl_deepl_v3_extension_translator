@@ -167,7 +167,7 @@
         const pageRange = form.querySelector('[data-role="page-range"]');
         const pageNumber = form.querySelector('[data-role="page-number"]');
         let refreshTimer = 0;
-        let currentPage = 1;
+        let currentPage = Math.max(1, parseInt(form.getAttribute('data-ppl-et-current-page') || '1', 10) || 1);
 
         function fileList() {
             return form.querySelector('[data-role="file-list"]');
@@ -302,11 +302,19 @@
             const fileListNode = fileList();
             const sidebarNode = sidebar();
             const fileSearchNode = form.querySelector('[data-role="file-search"]');
+            const findingSearchNode = form.querySelector('[data-role="finding-search"]');
+            const localeFilterNode = form.querySelector('[data-role="locale-filter"]');
+            const stateFilterNode = form.querySelector('[data-role="state-filter"]');
 
             return {
                 fileListScrollTop: fileListNode ? fileListNode.scrollTop : 0,
                 sidebarScrollTop: sidebarNode ? sidebarNode.scrollTop : 0,
                 fileSearch: fileSearchNode ? fileSearchNode.value : '',
+                findingSearch: findingSearchNode ? findingSearchNode.value : '',
+                localeFilter: localeFilterNode ? localeFilterNode.value : '',
+                stateFilter: stateFilterNode ? stateFilterNode.value : '',
+                pageSize: pageSize ? pageSize.value : '',
+                currentPage: currentPage,
                 fileGroupsOpen: fileGroups().reduce(function (state, group) {
                     state[group.getAttribute('data-group-key') || ''] = group.open;
                     return state;
@@ -327,9 +335,25 @@
                 return;
             }
 
+            function restoreControlValue(selector, value) {
+                const control = nextForm.querySelector(selector);
+                if (!control || typeof value === 'undefined') {
+                    return;
+                }
+                control.value = value;
+            }
+
             const fileSearchNode = nextForm.querySelector('[data-role="file-search"]');
-            if (fileSearchNode && state.fileSearch !== '') {
+            if (fileSearchNode) {
                 fileSearchNode.value = state.fileSearch;
+            }
+            restoreControlValue('[data-role="finding-search"]', state.findingSearch);
+            restoreControlValue('[data-role="locale-filter"]', state.localeFilter);
+            restoreControlValue('[data-role="state-filter"]', state.stateFilter);
+            restoreControlValue('[data-role="page-size"]', state.pageSize);
+
+            if (state.currentPage) {
+                nextForm.setAttribute('data-ppl-et-current-page', String(state.currentPage));
             }
 
             const selectedOnlyNode = nextForm.querySelector('[data-role="files-selected-only"]');
@@ -365,6 +389,9 @@
             if (action === 'scan') {
                 form.submit();
                 return;
+            }
+            if (action !== 'refresh_selection') {
+                window.clearTimeout(refreshTimer);
             }
 
             const uiState = stateOverride || captureUiState();
@@ -513,6 +540,7 @@
             updateFindingFilters(true);
             updateSelectedCount();
             updateIssueTypeGuards();
+            queueRefresh();
         }
 
         function updateLocaleOptions() {
@@ -626,6 +654,7 @@
             });
             updateSelectedCount();
             updateIssueTypeGuards();
+            queueRefresh();
         }
 
         function clearVisibleFindings() {
@@ -638,6 +667,7 @@
             });
             updateSelectedCount();
             updateIssueTypeGuards();
+            queueRefresh();
         }
 
         function normalizeLanguage(language) {
@@ -774,6 +804,7 @@
                 checkbox.checked = !checkbox.checked;
                 enforceSingleIssueType(checkbox);
                 updateSelectedCount();
+                queueRefresh();
             });
         });
 
@@ -781,6 +812,7 @@
             checkbox.addEventListener('change', function () {
                 enforceSingleIssueType(checkbox);
                 updateSelectedCount();
+                queueRefresh();
             });
         });
 
@@ -811,6 +843,7 @@
                 updateSelectedCount();
                 updateIssueTypeGuards();
                 updateSelectAllState();
+                queueRefresh();
             });
         });
 

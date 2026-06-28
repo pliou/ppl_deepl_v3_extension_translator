@@ -1,6 +1,6 @@
 # PPL DeepL V3 Extension Translator
 
-TYPO3 12.4 backend module for auditing extension XLF files and writing selected translation fixes.
+TYPO3 14 backend module for auditing extension XLF files and writing selected translation fixes.
 
 The module is audit-first:
 
