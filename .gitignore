@@ -2,6 +2,6 @@
 .Build/
 vendor/
 var/
-public/
+/public/
 typo3temp/
 composer.lock
